@@ -214,6 +214,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, datetime('now'), datet
 
     const { payment_method, notes } = body;
 
+    
+
    const existing = await env.DB.prepare(`
   SELECT id, status FROM payments
   WHERE id = ? AND deleted_at IS NULL
@@ -228,6 +230,7 @@ if (!existing) {
   );
 }
 
+// 🔒 BLOQUEIO 1 — já pago
 if (existing.status === "paid") {
   return Response.json(
     { success: false, message: "Payment already paid" },
@@ -235,22 +238,31 @@ if (existing.status === "paid") {
   );
 }
 
-    await env.DB.prepare(`
-      UPDATE payments
-      SET 
-        status = 'paid',
-        paid_at = datetime('now'),
-        payment_method = COALESCE(?, payment_method),
-        notes = COALESCE(?, notes),
-        updated_at = datetime('now')
-      WHERE id = ?
-    `)
-      .bind(
-        payment_method ?? null,
-        notes ?? null,
-        id
-      )
-      .run();
+// 🔒 BLOQUEIO 2 — estado inválido
+if (existing.status !== "pending") {
+  return Response.json(
+    { success: false, message: "Invalid payment state transition" },
+    { status: 400 }
+  );
+}
+
+// 👇 só chega aqui se for válido
+await env.DB.prepare(`
+  UPDATE payments
+  SET 
+    status = 'paid',
+    paid_at = datetime('now'),
+    payment_method = COALESCE(?, payment_method),
+    notes = COALESCE(?, notes),
+    updated_at = datetime('now')
+  WHERE id = ?
+`)
+.bind(
+  payment_method ?? null,
+  notes ?? null,
+  id
+)
+.run();
 
     return Response.json({
       success: true,
