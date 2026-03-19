@@ -106,7 +106,14 @@ const { email, password } = body;
         1000 * 60 * 60 * 2 // 2h
       );
 
-      return Response.json({ success: true, token });
+     return Response.json({
+  success: true,
+  token,
+  user: {
+    userId: userData.id,
+    role: userData.role
+  }
+});
 
     } catch (error: any) {
   console.error("LOGIN ERROR:", error);
