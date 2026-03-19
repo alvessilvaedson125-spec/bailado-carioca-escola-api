@@ -18,20 +18,36 @@ export async function requireAuth(request: Request, env: any) {
     const payload = await verifyJWT(token, env.JWT_SECRET);
 
     if (!payload) {
-      return { error: Response.json(
-        { success: false, message: "Unauthorized" },
-        { status: 401 }
-      )};
-    }
+  return {
+    error: Response.json(
+      { success: false, message: "Unauthorized (invalid token)" },
+      { status: 401 }
+    )
+  };
+}
+
+// 🔒 NOVO BLOCO (ADICIONAR LOGO ABAIXO)
+if (!payload.userId || !payload.role) {
+  return {
+    error: Response.json(
+      { success: false, message: "Unauthorized (invalid payload)" },
+      { status: 401 }
+    )
+  };
+}
 
     return { user: payload };
 
-  } catch {
-    return { error: Response.json(
-      { success: false, message: "Unauthorized" },
+  } catch (err) {
+  console.error("AUTH ERROR:", err);
+
+  return {
+    error: Response.json(
+      { success: false, message: "Unauthorized (token error)" },
       { status: 401 }
-    )};
-  }
+    )
+  };
+}
 }
 
 export function requireRole(user: any, allowedRoles: string[]) {
