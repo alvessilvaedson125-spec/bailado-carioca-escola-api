@@ -156,30 +156,40 @@ if (existingPayment) {
 const computed_due_date = `${competence_year}-${String(competence_month).padStart(2, "0")}-07`;
     await env.DB.prepare(`
       INSERT INTO payments (
-        id,
-        student_id,
-        amount,
-        competence_month,
-        competence_year,
-        due_date,
-        status,
-        payment_method,
-        notes,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, datetime('now'), datetime('now'))
+  id,
+  enrollment_id,
+  student_id,
+  amount,
+  gross_amount,
+  discount_percent,
+  discount_amount,
+  final_amount,
+  competence_month,
+  competence_year,
+  due_date,
+  status,
+  payment_method,
+  notes,
+  created_at,
+  updated_at
+)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, datetime('now'), datetime('now'))
     `)
       .bind(
   id,
+  enrollment_id,
   enrollment.student_id,
-  amount,
-        competence_month,
-        competence_year,
-       computed_due_date,
-        payment_method ?? null,
-        notes ?? null
-      )
+  amount,           // mantém compatibilidade
+  amount,           // gross_amount
+  0,                // discount_percent
+  0,                // discount_amount
+  amount,           // final_amount
+  competence_month,
+  competence_year,
+  computed_due_date,
+  payment_method ?? null,
+  notes ?? null
+)
       .run();
 
     return Response.json({
