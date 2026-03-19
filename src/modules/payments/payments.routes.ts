@@ -187,19 +187,26 @@ const computed_due_date = `${competence_year}-${String(competence_month).padStar
 
     const { payment_method, notes } = body;
 
-    const existing = await env.DB.prepare(`
-      SELECT id FROM payments
-      WHERE id = ? AND deleted_at IS NULL
-    `)
-      .bind(id)
-      .first();
+   const existing = await env.DB.prepare(`
+  SELECT id, status FROM payments
+  WHERE id = ? AND deleted_at IS NULL
+`)
+.bind(id)
+.first();
 
-    if (!existing) {
-      return Response.json(
-        { success: false, message: "Payment not found" },
-        { status: 404 }
-      );
-    }
+if (!existing) {
+  return Response.json(
+    { success: false, message: "Payment not found" },
+    { status: 404 }
+  );
+}
+
+if (existing.status === "paid") {
+  return Response.json(
+    { success: false, message: "Payment already paid" },
+    { status: 400 }
+  );
+}
 
     await env.DB.prepare(`
       UPDATE payments
