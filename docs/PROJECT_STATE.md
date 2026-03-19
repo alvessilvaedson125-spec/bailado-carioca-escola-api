@@ -1,69 +1,110 @@
 # Bailado Carioca — PROJECT STATE (SaaS)
 
-## 🧱 Arquitetura Atual
+## 📌 Visão Geral
 
-### Frontend
-- SPA (Vanilla JS modular)
-- Renderização dinâmica via innerHTML
-- Router próprio (router.js)
-- Estado em memória (cache local por módulo)
+O sistema **Bailado Carioca – Gestão de Aulas** é uma aplicação SaaS modular voltada para gestão de escolas de dança, com foco em controle acadêmico, financeiro e operacional.
 
-### Backend
+A arquitetura foi projetada para ser:
+- Modular
+- Escalável
+- Serverless
+- Segura
+- Orientada a domínio
+
+---
+
+## 🧱 Arquitetura
+
+### 🔹 Frontend
+
+- SPA (Single Page Application) em Vanilla JavaScript modular
+- Renderização dinâmica via `innerHTML`
+- Router próprio (`router.js`)
+- Gerenciamento de estado em memória por módulo (cache local)
+- Comunicação com backend via camada centralizada (`api.js`)
+
+📌 Características:
+- Baixo acoplamento
+- Sem dependência de frameworks
+- Controle total do fluxo de renderização
+
+---
+
+### 🔹 Backend
+
 - Cloudflare Workers (TypeScript)
-- Arquitetura modular por domínio
-- Middleware de autenticação (JWT)
-- RBAC básico (admin / operator)
+- Arquitetura modular por domínio (Domain-driven structure)
+- Middleware de autenticação via JWT
+- RBAC (Role-Based Access Control) com perfis:
+  - `admin`
+  - `operator`
+- Tratamento centralizado de CORS
 
-### Banco
+📌 Características:
+- Serverless distribuído globalmente
+- Baixa latência
+- Alta disponibilidade
+- Separação clara de responsabilidades por módulo
+
+---
+
+### 🔹 Banco de Dados
+
 - Cloudflare D1 (SQLite)
-- Migrations versionadas
-- Soft delete (deleted_at)
+- Migrations versionadas e incrementais
+- Soft delete (`deleted_at`)
+- Relacionamentos normalizados entre entidades
+
+📌 Características:
+- Integrado ao Worker
+- Estrutura preparada para crescimento
+- Segurança na persistência de dados
 
 ---
 
 ## 🧩 Módulos do Sistema
 
-### Frontend (Responsabilidade)
+### 🔸 Frontend (Responsabilidades)
 
 | Módulo       | Responsabilidade |
 |-------------|-----------------|
-| dashboard   | métricas + DRE |
-| students    | CRUD alunos |
-| classes     | CRUD turmas |
+| dashboard   | métricas e DRE (resultado financeiro) |
+| students    | CRUD de alunos |
+| classes     | CRUD de turmas |
 | enrollments | vínculo aluno ↔ turma |
-| payments    | mensalidades |
-| cash        | fluxo de caixa |
-| auth        | login + sessão |
+| payments    | geração e controle de mensalidades |
+| cash        | fluxo de caixa (entradas/saídas) |
+| auth        | autenticação e sessão |
 | router      | navegação SPA |
-| api         | camada HTTP |
+| api         | camada de comunicação HTTP |
 
 ---
 
-### Backend (Contratos)
+### 🔸 Backend (Contratos de API)
 
 #### Auth
-- POST /auth/login → retorna JWT
-- GET /auth/me → valida sessão
+- `POST /api/v1/auth/login` → autenticação e geração de JWT
+- `GET /api/v1/auth/me` → validação de sessão
 
 #### Students
-- GET /students
-- POST /students
+- `GET /api/v1/students`
+- `POST /api/v1/students`
 
 #### Classes
-- GET /classes
-- POST /classes
-- PUT /classes/:id
+- `GET /api/v1/classes`
+- `POST /api/v1/classes`
+- `PUT /api/v1/classes/:id`
 
 #### Enrollments
-- POST /enrollments
+- `POST /api/v1/enrollments`
 
 #### Payments
-- POST /payments/generate
-- GET /payments
+- `POST /api/v1/payments/generate`
+- `GET /api/v1/payments`
 
 #### Cash
-- GET /cash
-- POST /cash
+- `GET /api/v1/cash`
+- `POST /api/v1/cash`
 
 ---
 
@@ -76,6 +117,6 @@ Enrollments
    ↓
 Payments (geração mensal)
    ↓
-Cash (entrada real)
+Cash (entrada financeira real)
    ↓
-Dashboard (DRE)
+Dashboard (DRE consolidado)
