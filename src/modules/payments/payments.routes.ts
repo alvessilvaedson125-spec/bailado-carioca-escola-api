@@ -31,15 +31,20 @@ if (
   SELECT 
     p.*, 
     s.name as student_name,
-    
+    c.name as class_name,
+
   CASE
-  WHEN p.status = 'paid' THEN 'paid'
-  WHEN p.due_date IS NULL THEN 'pending'
-  WHEN DATE(p.due_date || ' 00:00:00') < DATE('now') THEN 'overdue'
-  ELSE 'pending'
-END as computed_status
+    WHEN p.status = 'paid' THEN 'paid'
+    WHEN p.due_date IS NULL THEN 'pending'
+    WHEN DATE(p.due_date || ' 00:00:00') < DATE('now') THEN 'overdue'
+    ELSE 'pending'
+  END as computed_status
+
   FROM payments p
-  JOIN students s ON s.id = p.student_id
+  JOIN enrollments e ON p.enrollment_id = e.id
+  JOIN students s ON e.student_id = s.id
+  JOIN classes c ON e.class_id = c.id
+
   WHERE p.deleted_at IS NULL
 `;
 

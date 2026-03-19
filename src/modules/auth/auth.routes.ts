@@ -108,12 +108,14 @@ const { email, password } = body;
 
       return Response.json({ success: true, token });
 
-    } catch {
-      return Response.json(
-        { success: false, message: "Login error" },
-        { status: 500 }
-      );
-    }
+    } catch (error: any) {
+  console.error("LOGIN ERROR:", error);
+
+  return Response.json(
+    { success: false, message: error?.message || "Login error" },
+    { status: 500 }
+  );
+}
   }
 
   // ME

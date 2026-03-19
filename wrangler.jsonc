@@ -15,6 +15,11 @@
 	]
 
 	,
+"vars": {
+  "JWT_SECRET": "bailado_carioca_super_secret_2026_erp_seguro"
+}
+
+	,
 "d1_databases": [
   {
     "binding": "DB",
