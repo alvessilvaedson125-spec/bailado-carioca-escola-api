@@ -134,6 +134,23 @@ if (
         { status: 400 }
       );
     }
+// 🔒 NOVO: evitar duplicação manual
+const existingPayment = await env.DB.prepare(`
+  SELECT id FROM payments
+  WHERE enrollment_id = ?
+  AND competence_month = ?
+  AND competence_year = ?
+  AND deleted_at IS NULL
+`)
+.bind(enrollment_id, competence_month, competence_year)
+.first();
+
+if (existingPayment) {
+  return Response.json(
+    { success: false, message: "Payment already exists for this period" },
+    { status: 400 }
+  );
+}
 
     const id = crypto.randomUUID();
 const computed_due_date = `${competence_year}-${String(competence_month).padStart(2, "0")}-07`;
