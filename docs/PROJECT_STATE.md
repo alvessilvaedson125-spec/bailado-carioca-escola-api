@@ -1,128 +1,81 @@
-# Bailado Carioca — Estado do Projeto (SaaS)
+# Bailado Carioca — PROJECT STATE (SaaS)
 
 ## 🧱 Arquitetura Atual
 
-- Frontend: SPA (HTML, CSS, JS puro)
-- Backend: Cloudflare Workers (TypeScript)
-- Banco: Cloudflare D1 (SQLite)
-- Infraestrutura: Serverless (Cloudflare)
-
----
-
-## 🧩 Módulos Existentes
-
 ### Frontend
-- dashboard.js
-- students.js
-- classes.js
-- enrollments.js
-- payments.js
-- cash.js
-- router.js
-- auth.js
-- api.js
+- SPA (Vanilla JS modular)
+- Renderização dinâmica via innerHTML
+- Router próprio (router.js)
+- Estado em memória (cache local por módulo)
 
 ### Backend
-- auth
-- students
-- classes
-- enrollments
-- payments
-- cash
+- Cloudflare Workers (TypeScript)
+- Arquitetura modular por domínio
+- Middleware de autenticação (JWT)
+- RBAC básico (admin / operator)
+
+### Banco
+- Cloudflare D1 (SQLite)
+- Migrations versionadas
+- Soft delete (deleted_at)
 
 ---
 
-## 🔗 Fluxo de Dados (Financeiro)
+## 🧩 Módulos do Sistema
 
-Enrollments → Payments → Cash → Dashboard (DRE)
+### Frontend (Responsabilidade)
 
-- Matrícula gera mensalidades
-- Pagamentos atualizam status
-- Caixa registra entradas/saídas
-- Dashboard consolida (DRE)
-
----
-
-## 📡 Endpoints Principais
-
-### Auth
-- POST /api/v1/auth/login
-- GET /api/v1/auth/me
-
-### Students
-- GET /api/v1/students
-- POST /api/v1/students
-
-### Payments
-- POST /api/v1/payments/generate
-- GET /api/v1/payments
-
-### Cash
-- GET /api/v1/cash
-- POST /api/v1/cash
+| Módulo       | Responsabilidade |
+|-------------|-----------------|
+| dashboard   | métricas + DRE |
+| students    | CRUD alunos |
+| classes     | CRUD turmas |
+| enrollments | vínculo aluno ↔ turma |
+| payments    | mensalidades |
+| cash        | fluxo de caixa |
+| auth        | login + sessão |
+| router      | navegação SPA |
+| api         | camada HTTP |
 
 ---
 
-## 🔐 Segurança
+### Backend (Contratos)
 
-- JWT (Bearer Token)
-- RBAC: admin / operator
-- Futuro: JWT assinado (criptográfico)
+#### Auth
+- POST /auth/login → retorna JWT
+- GET /auth/me → valida sessão
 
----
+#### Students
+- GET /students
+- POST /students
 
-## ⚙️ Decisões Arquiteturais
+#### Classes
+- GET /classes
+- POST /classes
+- PUT /classes/:id
 
-- SPA sem framework
-- Router próprio (router.js)
-- API REST padrão { success, data }
-- Sem funções globais duplicadas
-- Módulos isolados
+#### Enrollments
+- POST /enrollments
 
----
+#### Payments
+- POST /payments/generate
+- GET /payments
 
-## ⚠️ Problemas Já Resolvidos
-
-- conflito de escopo entre dashboard e payments
-- erro de inicialização de módulos
-- inconsistência entre "in/out" vs "entrada/saida"
-- erro de migration local vs remote
-
----
-
-## 🚧 Estado Atual
-
-- Payments: OK
-- Cash: OK (com DRE)
-- Dashboard: OK (métricas + financeiro)
-- Auth: OK
-- Router: OK
+#### Cash
+- GET /cash
+- POST /cash
 
 ---
 
-## 🚀 Próximos Passos
+## 🔗 Fluxo de Dados (Pipeline Financeiro)
 
-### Curto prazo
-- padronizar init() em todos módulos
-- melhorar UI dashboard
-- melhorar validação backend
-
-### Médio prazo
-- relatórios financeiros
-- filtros avançados
-- exportação CSV/PDF
-
-### Longo prazo
-- multi-tenant (tenant_id)
-- billing SaaS
-- analytics avançado
-
----
-
-## 🧠 Regras do Projeto
-
-- SEMPRE fazer backup antes de mudar DB
-- mudanças incrementais
-- evitar gambiarras
-- um passo por vez
-- validar sempre em produção (wrangler deploy)
+```txt
+Students
+   ↓
+Enrollments
+   ↓
+Payments (geração mensal)
+   ↓
+Cash (entrada real)
+   ↓
+Dashboard (DRE)
