@@ -1,0 +1,1 @@
+ALTER TABLE cash_entries ADD COLUMN status TEXT DEFAULT 'active';y
