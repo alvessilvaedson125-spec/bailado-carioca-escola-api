@@ -163,13 +163,15 @@ if (teachersResponse) return withCors(teachersResponse);
       // =========================
       // CASH
      // =========================
-       const cashResponse = await cashRoutes(
-       request,
-        env
-       );
+       if (url.pathname.startsWith("/api/v1/cash")) {
 
-        if (cashResponse) return withCors(cashResponse);
+  const cashResponse = await cashRoutes(
+    request,
+    env
+  );
 
+  if (cashResponse) return withCors(cashResponse);
+}
 
       
 
