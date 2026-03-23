@@ -72,23 +72,31 @@ export async function listCashEntries(env: any) {
 }
 
 export async function cancelCashEntry(request: Request, env: any) {
-  const body: any = await request.json();
-  const id = body.id;
+  try {
+   const body: any = await request.json();
+const id = body?.id;
 
-  if (!id) {
+    if (!id) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: "ID é obrigatório"
+      }), { status: 400 });
+    }
+
+    await env.DB.prepare(`
+      UPDATE cash_entries
+      SET status = 'cancelled'
+      WHERE id = ?
+    `).bind(id).run();
+
+    return new Response(JSON.stringify({
+      success: true
+    }));
+
+  } catch (err: any) {
     return new Response(JSON.stringify({
       success: false,
-      message: "ID é obrigatório"
-    }), { status: 400 });
+      message: err.message
+    }), { status: 500 });
   }
-
-  await env.DB.prepare(`
-    UPDATE cash_entries
-    SET status = 'cancelled'
-    WHERE id = ?
-  `).bind(id).run();
-
-  return new Response(JSON.stringify({
-    success: true
-  }));
 }
