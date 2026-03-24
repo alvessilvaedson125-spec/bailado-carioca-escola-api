@@ -2,17 +2,21 @@ import { createCashEntry, listCashEntries, cancelCashEntry } from "../payments/c
 
 export async function cashRoutes(request: Request, env: any) {
   const url = new URL(request.url);
+  const path = url.pathname;
 
-  if (request.method === "POST") {
+  // 🔥 CANCELAR
+  if (request.method === "POST" && path.endsWith("/cash/cancel")) {
+    return cancelCashEntry(request, env);
+  }
+
+  // 🔥 CRIAR
+  if (request.method === "POST" && path.endsWith("/cash")) {
     return createCashEntry(request, env);
   }
 
-  if (request.method === "GET") {
+  // 🔥 LISTAR
+  if (request.method === "GET" && path.endsWith("/cash")) {
     return listCashEntries(env);
-  }
-
-  if (request.method === "PATCH") {
-    return cancelCashEntry(request, env);
   }
 
   return new Response(JSON.stringify({
