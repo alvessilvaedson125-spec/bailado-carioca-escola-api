@@ -97,122 +97,149 @@ ORDER BY c.created_at DESC
       data: result,
     });
   }
+// CRIAR
+if (url.pathname === "/api/v1/classes" && request.method === "POST") {
+  const roleError = requireRole(user, ["admin"]);
+  if (roleError) return roleError;
 
-  // CRIAR
-  if (url.pathname === "/api/v1/classes" && request.method === "POST") {
-    const roleError = requireRole(user, ["admin"]);
-    if (roleError) return roleError;
+  const body = (await request.json()) as any;
+  const {
+    name,
+    description,
+    teachers, // 🔥 novo (array)
+    unit_id,
+    day_of_week,
+    start_time,
+    end_time,
+  } = body;
 
-    const body = (await request.json()) as any;
-    const {
+  if (!name) {
+    return Response.json(
+      { success: false, message: "Name is required" },
+      { status: 400 }
+    );
+  }
+
+  const id = crypto.randomUUID();
+
+  // 🔥 cria classe (SEM teacher_id obrigatório)
+  await env.DB.prepare(`
+    INSERT INTO classes (
+      id,
       name,
       description,
-      teacher_id,
       unit_id,
       day_of_week,
       start_time,
       end_time,
-    } = body;
-
-    if (!name) {
-      return Response.json(
-        { success: false, message: "Name is required" },
-        { status: 400 }
-      );
-    }
-
-    const id = crypto.randomUUID();
-
-    await env.DB.prepare(`
-      INSERT INTO classes (
-        id,
-        name,
-        description,
-        teacher_id,
-        unit_id,
-        day_of_week,
-        start_time,
-        end_time,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-    `)
-      .bind(
-        id,
-        name,
-        description ?? null,
-        teacher_id ?? null,
-        unit_id ?? null,
-        day_of_week ?? null,
-        start_time ?? null,
-        end_time ?? null
-      )
-      .run();
-
-    return Response.json({
-      success: true,
+      created_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+  `)
+    .bind(
       id,
-    });
-  }
+      name,
+      description ?? null,
+      unit_id ?? null,
+      day_of_week ?? null,
+      start_time ?? null,
+      end_time ?? null
+    )
+    .run();
 
-  // ATUALIZAR
-  if (
-    url.pathname.startsWith("/api/v1/classes/") &&
-    request.method === "PUT"
-  ) {
-    const roleError = requireRole(user, ["admin"]);
-    if (roleError) return roleError;
-
-    const id = url.pathname.split("/").pop();
-   const body = (await request.json()) as any;
-
-    const existing = await env.DB.prepare(`
-      SELECT id
-      FROM classes
-      WHERE id = ?
-      AND deleted_at IS NULL
-    `)
-      .bind(id)
-      .first();
-
-    if (!existing) {
-      return Response.json(
-        { success: false, message: "Class not found" },
-        { status: 404 }
-      );
+  // 🔥 salva múltiplos professores
+  if (Array.isArray(teachers)) {
+    for (const teacherId of teachers) {
+      await env.DB.prepare(`
+        INSERT INTO class_teachers (id, class_id, teacher_id)
+        VALUES (?, ?, ?)
+      `)
+        .bind(crypto.randomUUID(), id, teacherId)
+        .run();
     }
-
-    await env.DB.prepare(`
-      UPDATE classes
-      SET
-        name = ?,
-        description = ?,
-        teacher_id = ?,
-        unit_id = ?,
-        day_of_week = ?,
-        start_time = ?,
-        end_time = ?,
-        updated_at = datetime('now')
-      WHERE id = ?
-    `)
-      .bind(
-        body.name,
-        body.description ?? null,
-        body.teacher_id ?? null,
-        body.unit_id ?? null,
-        body.day_of_week ?? null,
-        body.start_time ?? null,
-        body.end_time ?? null,
-        id
-      )
-      .run();
-
-    return Response.json({
-      success: true,
-    });
   }
 
+  return Response.json({
+    success: true,
+    id,
+  });
+}
+  // ATUALIZAR
+if (
+  url.pathname.startsWith("/api/v1/classes/") &&
+  request.method === "PUT"
+) {
+  const roleError = requireRole(user, ["admin"]);
+  if (roleError) return roleError;
+
+  const id = url.pathname.split("/").pop();
+  const body = (await request.json()) as any;
+
+  const existing = await env.DB.prepare(`
+    SELECT id
+    FROM classes
+    WHERE id = ?
+    AND deleted_at IS NULL
+  `)
+    .bind(id)
+    .first();
+
+  if (!existing) {
+    return Response.json(
+      { success: false, message: "Class not found" },
+      { status: 404 }
+    );
+  }
+
+  // 🔥 atualiza classe
+  await env.DB.prepare(`
+    UPDATE classes
+    SET
+      name = ?,
+      description = ?,
+      unit_id = ?,
+      day_of_week = ?,
+      start_time = ?,
+      end_time = ?,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `)
+    .bind(
+      body.name,
+      body.description ?? null,
+      body.unit_id ?? null,
+      body.day_of_week ?? null,
+      body.start_time ?? null,
+      body.end_time ?? null,
+      id
+    )
+    .run();
+
+  // 🔥 remove antigos professores
+  await env.DB.prepare(`
+    DELETE FROM class_teachers
+    WHERE class_id = ?
+  `)
+    .bind(id)
+    .run();
+
+  // 🔥 insere novos professores
+  if (Array.isArray(body.teachers)) {
+    for (const teacherId of body.teachers) {
+      await env.DB.prepare(`
+        INSERT INTO class_teachers (id, class_id, teacher_id)
+        VALUES (?, ?, ?)
+      `)
+        .bind(crypto.randomUUID(), id, teacherId)
+        .run();
+    }
+  }
+
+  return Response.json({
+    success: true,
+  });
+}
   // SOFT DELETE
   if (
     url.pathname.startsWith("/api/v1/classes/") &&
