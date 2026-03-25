@@ -9,7 +9,8 @@ export async function generateMonthlyPayments(
     e.id as enrollment_id,
     e.student_id,
     e.monthly_fee,
-    e.discount
+e.discount,
+e.status
   FROM enrollments e
   JOIN students s ON s.id = e.student_id
   WHERE e.deleted_at IS NULL
@@ -21,6 +22,11 @@ export async function generateMonthlyPayments(
   let skipped = 0;
 
   for (const row of enrollments.results) {
+
+  // 🔒 SEGUNDA CAMADA DE SEGURANÇA
+  if (row.status && row.status !== "active") {
+    continue;
+  }
 
     const enrollmentId = row.enrollment_id;
     const studentId = row.student_id;
