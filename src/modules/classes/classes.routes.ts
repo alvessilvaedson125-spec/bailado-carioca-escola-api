@@ -11,6 +11,7 @@ export async function handleClassesRoutes(
     const roleError = requireRole(user, ["admin", "operator"]);
     if (roleError) return roleError;
 
+    
    const { results } = await env.DB.prepare(`
 SELECT
   c.id,
@@ -23,7 +24,8 @@ SELECT
   c.end_time,
   c.created_at,
 
-  t.name AS teacher_name,
+ GROUP_CONCAT(t.name, ', ') AS teacher_names
+ ,
   u.name AS unit_name,
 
   SUM(CASE 
@@ -38,8 +40,11 @@ SELECT
 
 FROM classes c
 
+LEFT JOIN class_teachers ct
+ON ct.class_id = c.id
+
 LEFT JOIN teachers t
-ON t.id = c.teacher_id
+ON t.id = ct.teacher_id
 
 LEFT JOIN units u
 ON u.id = c.unit_id
