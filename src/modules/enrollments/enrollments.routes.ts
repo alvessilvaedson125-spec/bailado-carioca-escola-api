@@ -35,86 +35,97 @@ export async function handleEnrollmentsRoutes(
   // CRIAR ENROLLMENT
   // =========================
   if (
-    url.pathname === "/api/v1/enrollments" &&
-    request.method === "POST"
-  ) {
-    const roleError = requireRole(user, ["admin"]);
-    if (roleError) return roleError;
+  url.pathname === "/api/v1/enrollments" &&
+  request.method === "POST"
+) {
+  const roleError = requireRole(user, ["admin"]);
+  if (roleError) return roleError;
 
-    const body = (await request.json()) as any;
-    const {
-  student_id,
-  class_id,
-  role,
-  type,
-  monthly_fee,
-  discount,
-  status
-} = body;
+  const body = (await request.json()) as any;
 
-    if (!student_id || !class_id) {
-      return Response.json(
-        { success: false, message: "student_id and class_id are required" },
-        { status: 400 }
-      );
-    }
-
-    // verificar existência
-    const student = await env.DB.prepare(`
-      SELECT id FROM students
-      WHERE id = ? AND deleted_at IS NULL
-    `)
-      .bind(student_id)
-      .first();
-
-    const classExists = await env.DB.prepare(`
-      SELECT id FROM classes
-      WHERE id = ? AND deleted_at IS NULL
-    `)
-      .bind(class_id)
-      .first();
-
-    if (!student || !classExists) {
-      return Response.json(
-        { success: false, message: "Invalid student or class" },
-        { status: 400 }
-      );
-    }
-
-    const id = crypto.randomUUID();
-
-   await env.DB.prepare(`
-  INSERT INTO enrollments (
-    id,
+  const {
     student_id,
     class_id,
     role,
     type,
     monthly_fee,
     discount,
-    status,
-    created_at,
-    updated_at
-  )
-  VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-`)
-.bind(
-  id,
-  student_id,
-  class_id,
-  role || "conductor",
-  type || "individual",
-  monthly_fee || 0,
-  discount || 0,
-  status || "active"
-)
-.run();
+    status
+  } = body;
 
-    return Response.json({
-      success: true,
-      id,
-    });
+  if (!student_id || !class_id) {
+    return Response.json(
+      { success: false, message: "student_id and class_id are required" },
+      { status: 400 }
+    );
   }
+
+  // 🚨 BLOQUEIO DE DUPLICIDADE (ANTES DO INSERT)
+  const existingEnrollment = await env.DB.prepare(`
+    SELECT id FROM enrollments
+    WHERE student_id = ?
+    AND class_id = ?
+    AND deleted_at IS NULL
+  `)
+    .bind(student_id, class_id)
+    .first();
+
+  if (existingEnrollment) {
+    return Response.json(
+      { success: false, message: "Aluno já matriculado nesta turma" },
+      { status: 400 }
+    );
+  }
+
+  const id = crypto.randomUUID();
+
+  try {
+
+    await env.DB.prepare(`
+      INSERT INTO enrollments (
+        id,
+        student_id,
+        class_id,
+        role,
+        type,
+        monthly_fee,
+        discount,
+        status,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `)
+    .bind(
+      id,
+      student_id,
+      class_id,
+      role || "conductor",
+      type || "individual",
+      monthly_fee || 0,
+      discount || 0,
+      status || "active"
+    )
+    .run();
+
+  } catch (err: any) {
+
+    // 🔥 fallback caso UNIQUE INDEX dispare
+    if (err.message?.includes("UNIQUE")) {
+      return Response.json(
+        { success: false, message: "Matrícula duplicada bloqueada" },
+        { status: 400 }
+      );
+    }
+
+    throw err;
+  }
+
+  return Response.json({
+    success: true,
+    id,
+  });
+}
 
   // =========================
 // UPDATE ENROLLMENT

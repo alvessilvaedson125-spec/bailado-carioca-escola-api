@@ -5,16 +5,17 @@ export async function generateMonthlyPayments(
 ) {
 
   const enrollments = await env.DB.prepare(`
-    SELECT
-      e.id as enrollment_id,
-      e.student_id,
-      e.monthly_fee,
-      e.discount
-    FROM enrollments e
-    JOIN students s ON s.id = e.student_id
-    WHERE e.deleted_at IS NULL
-    AND s.deleted_at IS NULL
-  `).all();
+  SELECT
+    e.id as enrollment_id,
+    e.student_id,
+    e.monthly_fee,
+    e.discount
+  FROM enrollments e
+  JOIN students s ON s.id = e.student_id
+  WHERE e.deleted_at IS NULL
+  AND s.deleted_at IS NULL
+  AND e.status = 'active' -- 🔥 ADICIONAR ISSO
+`).all();
 
   let generated = 0;
   let skipped = 0;

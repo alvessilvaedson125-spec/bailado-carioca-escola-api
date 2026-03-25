@@ -151,14 +151,30 @@ if (existingPayment) {
     { status: 400 }
   );
 }
+const enrollmentData = await env.DB.prepare(`
+  SELECT 
+    e.student_id,
+    s.name as student_name,
+    c.name as class_name
+  FROM enrollments e
+  JOIN students s ON s.id = e.student_id
+  JOIN classes c ON c.id = e.class_id
+  WHERE e.id = ?
+`)
+.bind(enrollment_id)
+.first();
+
+
 
     const id = crypto.randomUUID();
 const computed_due_date = `${competence_year}-${String(competence_month).padStart(2, "0")}-07`;
     await env.DB.prepare(`
-      INSERT INTO payments (
+     INSERT INTO payments (
   id,
   enrollment_id,
   student_id,
+  student_name,
+  class_name,
   amount,
   gross_amount,
   discount_percent,
@@ -173,12 +189,14 @@ const computed_due_date = `${competence_year}-${String(competence_month).padStar
   created_at,
   updated_at
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, datetime('now'), datetime('now'))
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, datetime('now'), datetime('now'))
     `)
-      .bind(
+     .bind(
   id,
   enrollment_id,
-  enrollment.student_id,
+  enrollmentData.student_id,
+  enrollmentData.student_name,
+  enrollmentData.class_name,
   amount,           // mantém compatibilidade
   amount,           // gross_amount
   0,                // discount_percent
