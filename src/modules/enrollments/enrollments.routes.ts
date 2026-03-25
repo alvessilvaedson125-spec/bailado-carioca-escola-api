@@ -168,24 +168,24 @@ const {
   await env.DB.prepare(`
   UPDATE enrollments
   SET
-    student_id = ?,
-    class_id = ?,
-    role = ?,
-    type = ?,
-    monthly_fee = ?,
-    discount = ?,
-    status = ?,
+    student_id = COALESCE(?, student_id),
+    class_id = COALESCE(?, class_id),
+    role = COALESCE(?, role),
+    type = COALESCE(?, type),
+    monthly_fee = COALESCE(?, monthly_fee),
+    discount = COALESCE(?, discount),
+    status = COALESCE(?, status),
     updated_at = datetime('now')
   WHERE id = ?
 `)
 .bind(
-  student_id,
-  class_id,
-  role || "conductor",
-  type || "individual",
-  monthly_fee || 0,
-  discount || 0,
-  status || "active",
+  student_id ?? null,
+  class_id ?? null,
+  role ?? null,
+  type ?? null,
+  monthly_fee ?? null,
+  discount ?? null,
+  status ?? null,
   id
 )
 .run();
