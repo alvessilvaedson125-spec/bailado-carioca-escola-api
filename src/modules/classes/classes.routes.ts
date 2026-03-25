@@ -24,8 +24,8 @@ SELECT
   c.end_time,
   c.created_at,
 
- GROUP_CONCAT(t.name, ', ') AS teacher_names,
- GROUP_CONCAT(t.id) AS teacher_ids,
+ GROUP_CONCAT(DISTINCT t.name, ', ') AS teacher_names,
+GROUP_CONCAT(DISTINCT t.id) AS teacher_ids,
   u.name AS unit_name,
 
 
