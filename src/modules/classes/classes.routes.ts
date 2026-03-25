@@ -227,16 +227,18 @@ if (
     .run();
 
   // 🔥 insere novos professores
-  if (Array.isArray(body.teachers)) {
-    for (const teacherId of body.teachers) {
-      await env.DB.prepare(`
-        INSERT INTO class_teachers (id, class_id, teacher_id)
-        VALUES (?, ?, ?)
-      `)
-        .bind(crypto.randomUUID(), id, teacherId)
-        .run();
-    }
+ if (Array.isArray(body.teachers)) {
+  const uniqueTeachers = [...new Set(body.teachers)];
+
+  for (const teacherId of uniqueTeachers) {
+    await env.DB.prepare(`
+      INSERT INTO class_teachers (id, class_id, teacher_id)
+      VALUES (?, ?, ?)
+    `)
+      .bind(crypto.randomUUID(), id, teacherId)
+      .run();
   }
+}
 
   return Response.json({
     success: true,
