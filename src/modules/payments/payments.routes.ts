@@ -378,8 +378,8 @@ if (
   url.pathname === "/api/v1/payments/by-class" &&
   request.method === "GET"
 ) {
-  const roleError = requireRole(user, ["admin", "operator"]);
-  if (roleError) return roleError;
+  // 🔓 liberar leitura para qualquer usuário autenticado
+// (dashboard precisa disso)
 
   const { results } = await env.DB.prepare(`
     SELECT
