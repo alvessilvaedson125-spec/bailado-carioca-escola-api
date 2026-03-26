@@ -371,5 +371,54 @@ if (
   });
 }
 
+// =========================
+// RECEITA POR TURMA
+// =========================
+if (
+  url.pathname === "/api/v1/payments/by-class" &&
+  request.method === "GET"
+) {
+  const roleError = requireRole(user, ["admin", "operator"]);
+  if (roleError) return roleError;
+
+  const { results } = await env.DB.prepare(`
+    SELECT
+      c.id as class_id,
+      c.name as class_name,
+
+      SUM(p.final_amount) as total_expected,
+
+      SUM(
+        CASE 
+          WHEN p.status = 'paid' THEN p.final_amount
+          ELSE 0
+        END
+      ) as total_received,
+
+      SUM(
+        CASE 
+          WHEN p.status = 'pending'
+               AND date(p.due_date) < date('now')
+          THEN p.final_amount
+          ELSE 0
+        END
+      ) as total_overdue
+
+    FROM payments p
+    JOIN enrollments e ON p.enrollment_id = e.id
+    JOIN classes c ON e.class_id = c.id
+
+    WHERE p.deleted_at IS NULL
+
+    GROUP BY c.id, c.name
+    ORDER BY total_expected DESC
+  `).all();
+
+  return Response.json({
+    success: true,
+    data: results,
+  });
+}
+
   return null;
 }
