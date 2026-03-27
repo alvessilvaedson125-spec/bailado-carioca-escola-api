@@ -13,7 +13,7 @@ export async function handleEnrollmentsRoutes(
     url.pathname === "/api/v1/enrollments" &&
     request.method === "GET"
   ) {
-    const roleError = requireRole(user, ["admin", "operator"]);
+    const roleError = requireRole(user, ["admin", "operator", "user"]);
     if (roleError) return roleError;
 
     const { results } = await env.DB.prepare(`
