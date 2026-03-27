@@ -347,6 +347,131 @@ Mitigação:
 
 ---
 
+ ## 6.5 Integridade de Tipos entre Camadas (CRÍTICO)
+Problema identificado
+
+Durante a implementação da navegação entre módulos (Students → Enrollments), foi identificado um erro crítico de tipagem:
+
+const studentId = Number(selectedStudentId);
+
+O sistema utiliza IDs como string (UUID), porém houve tentativa de conversão para número.
+
+Efeito observado
+
+Exemplo real:
+
+selectedStudentId = "c7b8-uuid"
+Number("c7b8-uuid") → NaN
+
+Impacto direto:
+
+String(e.student_id) === String(studentId)
+
+Se torna:
+
+"c7b8-uuid" === "NaN"
+
+Consequências:
+
+Filtros retornando listas vazias
+Tela de matrículas sem dados
+Quebra de fluxo entre módulos
+Falso diagnóstico de erro de API/backend
+Causa raiz
+
+Violação de contrato de tipo:
+
+Frontend assumindo número
+Backend operando com string (UUID)
+Correção aplicada
+
+Substituição direta:
+
+const studentId = Number(selectedStudentId);
+
+por:
+
+const studentId = selectedStudentId;
+Resultado
+Filtro funcional restaurado
+Navegação entre módulos estabilizada
+Dados corretamente associados
+Eliminação de falsos negativos no frontend
+Regra arquitetural definida (OBRIGATÓRIA)
+IDs são tratados como strings em TODAS as camadas
+
+Proibido:
+
+Number(id)
+parseInt(id)
+qualquer coerção implícita
+Justificativa técnica
+
+O sistema utiliza:
+
+UUID
+IDs não sequenciais
+Identificadores externos
+
+Logo:
+
+Conversão numérica destrói a identidade do dado
+Classificação do problema
+Tipo	Nível
+Bug de tipagem	Crítico
+Impacto	Alto
+Detecção	Difícil (silencioso)
+Aprendizado consolidado
+Erros de tipo não geram exceção → geram inconsistência silenciosa
+
+Isso é mais perigoso que erro explícito.
+
+🎯 IMPACTO ARQUITETURAL (IMPORTANTE)
+
+Esse ajuste reforça diretamente:
+
+✔ Backend como fonte da verdade
+✔ Tipagem consistente entre camadas
+✔ Previsibilidade de filtros e queries
+✔ Integridade do domínio
+
+## 6.6 Incidentes Críticos Resolvidos
+
+
+### 🔥 Incidente 1 — Race condition no router
+
+- Sintoma: tela travando em "Carregando..."
+- Causa: init executando antes do módulo carregar
+- Correção: waitForModule()
+- Impacto: estabilidade do SPA restaurada
+
+---
+
+### 🔥 Incidente 2 — RBAC bloqueando enrollments
+
+- Sintoma: 403 na API
+- Causa: requireRole restritivo
+- Correção: ajuste de permissões
+- Impacto: fluxo de dados restabelecido
+
+---
+
+### 🔥 Incidente 3 — Hash incorreto (#/enrollments)
+
+- Sintoma: módulo não carregava
+- Causa: rota incompatível com router
+- Correção: uso de window.location.hash
+- Impacto: navegação estabilizada
+
+---
+
+### 🔥 Incidente 4 — Tipagem de ID (CRÍTICO)
+
+- Sintoma: dados não apareciam
+- Causa: Number() em UUID
+- Correção: uso de string
+- Impacto: correção total do fluxo
+
 # 🚀 7. ROADMAP EVOLUTIVO
 
 ---
