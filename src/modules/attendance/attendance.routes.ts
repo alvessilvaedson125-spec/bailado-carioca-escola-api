@@ -9,7 +9,6 @@ export async function handleAttendanceRoutes(
 
   // =========================
   // LISTAR PRESENÇAS
-  // por turma + data
   // =========================
   if (
     url.pathname === "/api/v1/attendance" &&
@@ -70,8 +69,69 @@ export async function handleAttendanceRoutes(
   }
 
   // =========================
+  // FREQUÊNCIA PARA DASHBOARD
+  // resumo geral de todas as turmas
+  // =========================
+  if (
+    url.pathname === "/api/v1/attendance/dashboard" &&
+    request.method === "GET"
+  ) {
+    const roleError = requireRole(user, ["admin", "operator"]);
+    if (roleError) return roleError;
+
+    // Frequência média por turma
+    const { results: byClass } = await env.DB.prepare(`
+      SELECT
+        c.id as class_id,
+        c.name as class_name,
+        COUNT(DISTINCT CASE WHEN a.date IS NOT NULL THEN a.date END) as total_classes,
+        COUNT(CASE WHEN a.status = 'present' THEN 1 END) as total_present,
+        COUNT(CASE WHEN a.status = 'absent'  THEN 1 END) as total_absent,
+        COUNT(a.id) as total_records,
+        COUNT(DISTINCT e.student_id) as total_students
+      FROM classes c
+      LEFT JOIN enrollments e ON e.class_id = c.id
+        AND e.status = 'active'
+        AND e.deleted_at IS NULL
+      LEFT JOIN attendance a ON a.class_id = c.id
+        AND a.deleted_at IS NULL
+      WHERE c.deleted_at IS NULL
+      GROUP BY c.id, c.name
+      ORDER BY c.name ASC
+    `).all();
+
+    // Frequência média geral
+    const { results: overall } = await env.DB.prepare(`
+      SELECT
+        COUNT(CASE WHEN status = 'present' THEN 1 END) as total_present,
+        COUNT(CASE WHEN status = 'absent'  THEN 1 END) as total_absent,
+        COUNT(id) as total_records
+      FROM attendance
+      WHERE deleted_at IS NULL
+    `).all();
+
+    const overallData = overall[0] as any;
+    const totalRecords = Number(overallData?.total_records || 0);
+    const totalPresent = Number(overallData?.total_present || 0);
+
+    const avgFrequency = totalRecords > 0
+      ? (totalPresent / totalRecords) * 100
+      : 0;
+
+    return Response.json({
+      success: true,
+      data: {
+        by_class:      byClass,
+        avg_frequency: avgFrequency,
+        total_present: totalPresent,
+        total_absent:  Number(overallData?.total_absent || 0),
+        total_records: totalRecords
+      }
+    });
+  }
+
+  // =========================
   // BUSCAR ALUNOS DA TURMA
-  // para montar a chamada
   // =========================
   if (
     url.pathname === "/api/v1/attendance/students" &&
@@ -90,7 +150,6 @@ export async function handleAttendanceRoutes(
       );
     }
 
-    // Busca alunos matriculados ativos na turma
     const { results: enrollments } = await env.DB.prepare(`
       SELECT
         e.id as enrollment_id,
@@ -106,7 +165,6 @@ export async function handleAttendanceRoutes(
       ORDER BY s.name ASC
     `).bind(classId).all();
 
-    // Busca presenças já registradas para esta turma/data
     const { results: existing } = await env.DB.prepare(`
       SELECT enrollment_id, status
       FROM attendance
@@ -115,19 +173,17 @@ export async function handleAttendanceRoutes(
         AND deleted_at IS NULL
     `).bind(classId, date).all();
 
-    // Monta mapa de presenças existentes
     const attendanceMap: Record<string, string> = {};
     existing.forEach((a: any) => {
       attendanceMap[a.enrollment_id] = a.status;
     });
 
-    // Combina: aluno + status já registrado (se houver)
     const data = enrollments.map((e: any) => ({
       enrollment_id: e.enrollment_id,
       student_id:    e.student_id,
       student_name:  e.student_name,
       scholarship:   e.scholarship === 1,
-      status:        attendanceMap[e.enrollment_id] || null // null = não registrado
+      status:        attendanceMap[e.enrollment_id] || null
     }));
 
     return Response.json({ success: true, data });
@@ -135,7 +191,6 @@ export async function handleAttendanceRoutes(
 
   // =========================
   // REGISTRAR CHAMADA
-  // salva presença em lote
   // =========================
   if (
     url.pathname === "/api/v1/attendance" &&
@@ -154,7 +209,6 @@ export async function handleAttendanceRoutes(
       );
     }
 
-    // Valida formato da data
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return Response.json(
         { success: false, message: "Formato de data inválido. Use YYYY-MM-DD" },
@@ -171,7 +225,6 @@ export async function handleAttendanceRoutes(
       if (!enrollment_id || !student_id || !status) continue;
       if (!["present", "absent"].includes(status)) continue;
 
-      // Verifica se já existe presença para este enrollment+date
       const existing = await env.DB.prepare(`
         SELECT id FROM attendance
         WHERE enrollment_id = ?
@@ -180,7 +233,6 @@ export async function handleAttendanceRoutes(
       `).bind(enrollment_id, date).first();
 
       if (existing) {
-        // Atualiza presença existente
         await env.DB.prepare(`
           UPDATE attendance
           SET status = ?, created_by = ?
@@ -188,7 +240,6 @@ export async function handleAttendanceRoutes(
         `).bind(status, user.userId, existing.id).run();
         updated++;
       } else {
-        // Insere nova presença
         const id = crypto.randomUUID();
         await env.DB.prepare(`
           INSERT INTO attendance (
@@ -204,11 +255,7 @@ export async function handleAttendanceRoutes(
       }
     }
 
-    return Response.json({
-      success: true,
-      saved,
-      updated
-    });
+    return Response.json({ success: true, saved, updated });
   }
 
   // =========================
