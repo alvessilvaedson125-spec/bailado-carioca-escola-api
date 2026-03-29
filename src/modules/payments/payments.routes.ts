@@ -53,20 +53,30 @@ if (
   // =========================
   // FILTROS DINÂMICOS
   // =========================
-  if (competenceMonth) {
-    query += ` AND p.competence_month = ?`;
-    params.push(Number(competenceMonth));
-  }
+  // =========================
+// FILTROS DINÂMICOS
+// =========================
+if (competenceMonth) {
+  query += ` AND p.competence_month = ?`;
+  params.push(Number(competenceMonth));
+}
 
-  if (competenceYear) {
-    query += ` AND p.competence_year = ?`;
-    params.push(Number(competenceYear));
-  }
+if (competenceYear) {
+  query += ` AND p.competence_year = ?`;
+  params.push(Number(competenceYear));
+}
 
-  if (status) {
-    query += ` AND p.status = ?`;
-    params.push(status);
-  }
+if (status) {
+  query += ` AND p.status = ?`;
+  params.push(status);
+}
+
+// 🔥 NOVO
+const classId = url.searchParams.get("class_id");
+if (classId) {
+  query += ` AND e.class_id = ?`;
+  params.push(classId);
+}
 
   // =========================
   // ORDENAÇÃO
