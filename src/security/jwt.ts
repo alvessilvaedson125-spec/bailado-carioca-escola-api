@@ -34,7 +34,7 @@ export async function generateJWT(
   }
 
   const header = { alg: "HS256", typ: "JWT" };
-  const exp = Date.now() + expiresInMs;
+ const exp = Math.floor(Date.now() / 1000) + Math.floor(expiresInMs / 1000);
 
   const fullPayload = { ...payload, exp };
 
@@ -109,7 +109,7 @@ export async function verifyJWT(token: string, secret: string) {
 
 const exp = Number(payload.exp);
 
-if (Date.now() > exp) return null;
+if (Math.floor(Date.now() / 1000) > exp) return null;
 
   return payload;
 }
