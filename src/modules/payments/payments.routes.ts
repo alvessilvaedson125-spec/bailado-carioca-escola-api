@@ -7,95 +7,75 @@ export async function handlePaymentsRoutes(
   url: URL,
   user: any
 ) {
-  // =========================
-// LISTAR PAYMENTS (COM FILTROS)
-// =========================
-if (
-  url.pathname === "/api/v1/payments" &&
-  request.method === "GET"
-) {
-  const roleError = requireRole(user, ["admin", "operator"]);
-  if (roleError) return roleError;
 
   // =========================
-  // QUERY PARAMS
+  // LISTAR PAYMENTS
   // =========================
-  const competenceMonth = url.searchParams.get("competence_month");
-  const competenceYear = url.searchParams.get("competence_year");
-  const status = url.searchParams.get("status");
+  if (
+    url.pathname === "/api/v1/payments" &&
+    request.method === "GET"
+  ) {
+    const roleError = requireRole(user, ["admin", "operator"]);
+    if (roleError) return roleError;
 
-  // =========================
-  // BASE QUERY
-  // =========================
-  let query = `
-  SELECT 
-    p.*, 
-    s.name as student_name,
-    c.name as class_name,
+    const competenceMonth = url.searchParams.get("competence_month");
+    const competenceYear  = url.searchParams.get("competence_year");
+    const status          = url.searchParams.get("status");
+    const classId         = url.searchParams.get("class_id");
 
-  CASE
-    WHEN p.status = 'paid' THEN 'paid'
-    WHEN p.due_date IS NULL THEN 'pending'
-    WHEN DATE(p.due_date || ' 00:00:00') < DATE('now') THEN 'overdue'
-    ELSE 'pending'
-  END as computed_status
+    let query = `
+      SELECT
+        p.*,
+        s.name as student_name,
+        c.name as class_name,
+        e.scholarship,
+        CASE
+          WHEN p.status = 'paid' THEN 'paid'
+          WHEN p.due_date IS NULL THEN 'pending'
+          WHEN DATE(p.due_date || ' 00:00:00') < DATE('now') THEN 'overdue'
+          ELSE 'pending'
+        END as computed_status
+      FROM payments p
+      JOIN enrollments e ON p.enrollment_id = e.id
+      JOIN students s ON e.student_id = s.id
+      JOIN classes c ON e.class_id = c.id
+      WHERE p.deleted_at IS NULL
+    `;
 
-  FROM payments p
-  JOIN enrollments e ON p.enrollment_id = e.id
-  JOIN students s ON e.student_id = s.id
-  JOIN classes c ON e.class_id = c.id
+    const params: any[] = [];
 
-  WHERE p.deleted_at IS NULL
-`;
+    if (competenceMonth) {
+      query += ` AND p.competence_month = ?`;
+      params.push(Number(competenceMonth));
+    }
 
-  const params: any[] = [];
+    if (competenceYear) {
+      query += ` AND p.competence_year = ?`;
+      params.push(Number(competenceYear));
+    }
 
-  // =========================
-  // FILTROS DINÂMICOS
-  // =========================
-  // =========================
-// FILTROS DINÂMICOS
-// =========================
-if (competenceMonth) {
-  query += ` AND p.competence_month = ?`;
-  params.push(Number(competenceMonth));
-}
+    if (status) {
+      query += ` AND p.status = ?`;
+      params.push(status);
+    }
 
-if (competenceYear) {
-  query += ` AND p.competence_year = ?`;
-  params.push(Number(competenceYear));
-}
+    if (classId) {
+      query += ` AND e.class_id = ?`;
+      params.push(classId);
+    }
 
-if (status) {
-  query += ` AND p.status = ?`;
-  params.push(status);
-}
+    query += `
+      ORDER BY
+        p.competence_year DESC,
+        p.competence_month DESC
+    `;
 
-// 🔥 NOVO
-const classId = url.searchParams.get("class_id");
-if (classId) {
-  query += ` AND e.class_id = ?`;
-  params.push(classId);
-}
+    const { results } = await env.DB.prepare(query)
+      .bind(...params)
+      .all();
 
-  // =========================
-  // ORDENAÇÃO
-  // =========================
-  query += `
-    ORDER BY 
-      p.competence_year DESC,
-      p.competence_month DESC
-  `;
-
-  const { results } = await env.DB.prepare(query)
-    .bind(...params)
-    .all();
-
-  return Response.json({
-    success: true,
-    data: results,
-  });
-}
+    return Response.json({ success: true, data: results });
+  }
 
   // =========================
   // CRIAR PAYMENT
@@ -114,17 +94,11 @@ if (classId) {
       amount,
       competence_month,
       competence_year,
-      due_date,
       payment_method,
       notes,
     } = body;
 
-    if (
-      !enrollment_id ||
-      !amount ||
-      !competence_month ||
-      !competence_year
-    ) {
+    if (!enrollment_id || !amount || !competence_month || !competence_year) {
       return Response.json(
         { success: false, message: "Missing required fields" },
         { status: 400 }
@@ -132,11 +106,9 @@ if (classId) {
     }
 
     const enrollment = await env.DB.prepare(`
-  SELECT student_id FROM enrollments
-  WHERE id = ? AND deleted_at IS NULL
-`)
-.bind(enrollment_id)
-.first();
+      SELECT student_id FROM enrollments
+      WHERE id = ? AND deleted_at IS NULL
+    `).bind(enrollment_id).first();
 
     if (!enrollment) {
       return Response.json(
@@ -144,86 +116,61 @@ if (classId) {
         { status: 400 }
       );
     }
-// 🔒 NOVO: evitar duplicação manual
-const existingPayment = await env.DB.prepare(`
-  SELECT id FROM payments
-  WHERE enrollment_id = ?
-  AND competence_month = ?
-  AND competence_year = ?
-  AND deleted_at IS NULL
-`)
-.bind(enrollment_id, competence_month, competence_year)
-.first();
 
-if (existingPayment) {
-  return Response.json(
-    { success: false, message: "Payment already exists for this period" },
-    { status: 400 }
-  );
-}
-const enrollmentData = await env.DB.prepare(`
-  SELECT 
-    e.student_id,
-    s.name as student_name,
-    c.name as class_name
-  FROM enrollments e
-  JOIN students s ON s.id = e.student_id
-  JOIN classes c ON c.id = e.class_id
-  WHERE e.id = ?
-`)
-.bind(enrollment_id)
-.first();
+    const existingPayment = await env.DB.prepare(`
+      SELECT id FROM payments
+      WHERE enrollment_id = ?
+      AND competence_month = ?
+      AND competence_year = ?
+      AND deleted_at IS NULL
+    `).bind(enrollment_id, competence_month, competence_year).first();
 
+    if (existingPayment) {
+      return Response.json(
+        { success: false, message: "Payment already exists for this period" },
+        { status: 400 }
+      );
+    }
 
+    const enrollmentData = await env.DB.prepare(`
+      SELECT
+        e.student_id,
+        s.name as student_name,
+        c.name as class_name
+      FROM enrollments e
+      JOIN students s ON s.id = e.student_id
+      JOIN classes c ON c.id = e.class_id
+      WHERE e.id = ?
+    `).bind(enrollment_id).first();
 
     const id = crypto.randomUUID();
-const computed_due_date = `${competence_year}-${String(competence_month).padStart(2, "0")}-07`;
-    await env.DB.prepare(`
-     INSERT INTO payments (
-  id,
-  enrollment_id,
-  student_id,
-  student_name,
-  class_name,
-  amount,
-  gross_amount,
-  discount_percent,
-  discount_amount,
-  final_amount,
-  competence_month,
-  competence_year,
-  due_date,
-  status,
-  payment_method,
-  notes,
-  created_at,
-  updated_at
-)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, datetime('now'), datetime('now'))
-    `)
-     .bind(
-  id,
-  enrollment_id,
-  enrollmentData.student_id,
-  enrollmentData.student_name,
-  enrollmentData.class_name,
-  amount,           // mantém compatibilidade
-  amount,           // gross_amount
-  0,                // discount_percent
-  0,                // discount_amount
-  amount,           // final_amount
-  competence_month,
-  competence_year,
-  computed_due_date,
-  payment_method ?? null,
-  notes ?? null
-)
-      .run();
+    const computed_due_date = `${competence_year}-${String(competence_month).padStart(2, "0")}-07`;
 
-    return Response.json({
-      success: true,
+    await env.DB.prepare(`
+      INSERT INTO payments (
+        id, enrollment_id, student_id, student_name, class_name,
+        amount, gross_amount, discount_percent, discount_amount, final_amount,
+        competence_month, competence_year, due_date, status,
+        payment_method, notes, created_at, updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, datetime('now'), datetime('now'))
+    `)
+    .bind(
       id,
-    });
+      enrollment_id,
+      enrollmentData.student_id,
+      enrollmentData.student_name,
+      enrollmentData.class_name,
+      amount, amount, 0, 0, amount,
+      competence_month,
+      competence_year,
+      computed_due_date,
+      payment_method ?? null,
+      notes ?? null
+    )
+    .run();
+
+    return Response.json({ success: true, id });
   }
 
   // =========================
@@ -237,198 +184,162 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, datetime('now'),
     if (roleError) return roleError;
 
     const id = url.pathname.split("/").pop();
-
     const body = (await request.json().catch(() => ({}))) as any;
-
     const { payment_method, notes } = body;
 
-    
+    const existing = await env.DB.prepare(`
+      SELECT id, status FROM payments
+      WHERE id = ? AND deleted_at IS NULL
+    `).bind(id).first();
 
-   const existing = await env.DB.prepare(`
-  SELECT id, status FROM payments
-  WHERE id = ? AND deleted_at IS NULL
-`)
-.bind(id)
-.first();
+    if (!existing) {
+      return Response.json(
+        { success: false, message: "Payment not found" },
+        { status: 404 }
+      );
+    }
 
-if (!existing) {
-  return Response.json(
-    { success: false, message: "Payment not found" },
-    { status: 404 }
-  );
-}
+    if (existing.status === "paid") {
+      return Response.json(
+        { success: false, message: "Payment already paid" },
+        { status: 400 }
+      );
+    }
 
-// 🔒 BLOQUEIO 1 — já pago
-if (existing.status === "paid") {
-  return Response.json(
-    { success: false, message: "Payment already paid" },
-    { status: 400 }
-  );
-}
+    if (existing.status !== "pending") {
+      return Response.json(
+        { success: false, message: "Invalid payment state transition" },
+        { status: 400 }
+      );
+    }
 
-// 🔒 BLOQUEIO 2 — estado inválido
-if (existing.status !== "pending") {
-  return Response.json(
-    { success: false, message: "Invalid payment state transition" },
-    { status: 400 }
-  );
-}
+    await env.DB.prepare(`
+      UPDATE payments
+      SET
+        status = 'paid',
+        paid_at = datetime('now'),
+        payment_method = COALESCE(?, payment_method),
+        notes = COALESCE(?, notes),
+        updated_at = datetime('now')
+      WHERE id = ?
+    `)
+    .bind(payment_method ?? null, notes ?? null, id)
+    .run();
 
-// 👇 só chega aqui se for válido
-await env.DB.prepare(`
-  UPDATE payments
-  SET 
-    status = 'paid',
-    paid_at = datetime('now'),
-    payment_method = COALESCE(?, payment_method),
-    notes = COALESCE(?, notes),
-    updated_at = datetime('now')
-  WHERE id = ?
-`)
-.bind(
-  payment_method ?? null,
-  notes ?? null,
-  id
-)
-.run();
+    return Response.json({ success: true });
+  }
+
+  // =========================
+  // GERAR MENSALIDADES
+  // =========================
+  if (
+    url.pathname === "/api/v1/payments/generate" &&
+    request.method === "POST"
+  ) {
+    const roleError = requireRole(user, ["admin"]);
+    if (roleError) return roleError;
+
+    const body = (await request.json()) as any;
+    const { competence_month, competence_year } = body;
+
+    if (!competence_month || !competence_year) {
+      return Response.json(
+        { success: false, message: "Missing competence fields" },
+        { status: 400 }
+      );
+    }
+
+    const result = await generateMonthlyPayments(env, competence_month, competence_year);
 
     return Response.json({
       success: true,
+      generated: result.generated,
+      skipped: result.skipped,
     });
   }
 
   // =========================
-// GERAR MENSALIDADES
-// =========================
-if (
-  url.pathname === "/api/v1/payments/generate" &&
-  request.method === "POST"
-) {
-  const roleError = requireRole(user, ["admin"]);
-  if (roleError) return roleError;
+  // RESUMO FINANCEIRO
+  // 🔥 Exclui bolsistas integrais
+  // =========================
+  if (
+    url.pathname === "/api/v1/payments/summary" &&
+    request.method === "GET"
+  ) {
+    const roleError = requireRole(user, ["admin", "operator"]);
+    if (roleError) return roleError;
 
-  const body = (await request.json()) as any;
+    const { results } = await env.DB.prepare(`
+      SELECT
+        SUM(p.final_amount) as total_expected,
 
-  const { competence_month, competence_year } = body;
+        SUM(
+          CASE WHEN p.status = 'paid' THEN p.final_amount ELSE 0 END
+        ) as total_paid,
 
-  if (!competence_month || !competence_year) {
-    return Response.json(
-      { success: false, message: "Missing competence fields" },
-      { status: 400 }
-    );
+        SUM(
+          CASE
+            WHEN p.status = 'pending'
+              AND date(p.competence_year || '-' || printf('%02d', p.competence_month) || '-10') >= date('now')
+            THEN p.final_amount ELSE 0
+          END
+        ) as total_pending,
+
+        SUM(
+          CASE
+            WHEN p.status = 'pending'
+              AND date(p.competence_year || '-' || printf('%02d', p.competence_month) || '-10') < date('now')
+            THEN p.final_amount ELSE 0
+          END
+        ) as total_overdue
+
+      FROM payments p
+      JOIN enrollments e ON p.enrollment_id = e.id
+      WHERE p.deleted_at IS NULL
+        AND NOT (e.scholarship = 1 AND p.final_amount = 0)
+    `).all();
+
+    return Response.json({ success: true, data: results[0] });
   }
 
-  const result = await generateMonthlyPayments(
-    env,
-    competence_month,
-    competence_year
-  );
+  // =========================
+  // RECEITA POR TURMA
+  // 🔥 Exclui bolsistas integrais
+  // =========================
+  if (
+    url.pathname === "/api/v1/payments/by-class" &&
+    request.method === "GET"
+  ) {
+    const { results } = await env.DB.prepare(`
+      SELECT
+        c.id as class_id,
+        c.name as class_name,
 
-  return Response.json({
-    success: true,
-    generated: result.generated,
-    skipped: result.skipped,
-  });
-}
+        SUM(p.final_amount) as total_expected,
 
-// =========================
-// RESUMO FINANCEIRO
-// =========================
-if (
-  url.pathname === "/api/v1/payments/summary" &&
-  request.method === "GET"
-) {
-  const roleError = requireRole(user, ["admin", "operator"]);
-  if (roleError) return roleError;
+        SUM(
+          CASE WHEN p.status = 'paid' THEN p.final_amount ELSE 0 END
+        ) as total_received,
 
-  const { results } = await env.DB.prepare(`
-    SELECT
+        SUM(
+          CASE
+            WHEN p.status = 'pending'
+              AND date(p.due_date) < date('now')
+            THEN p.final_amount ELSE 0
+          END
+        ) as total_overdue
 
-      SUM(p.final_amount) as total_expected,
+      FROM payments p
+      JOIN enrollments e ON p.enrollment_id = e.id
+      JOIN classes c ON e.class_id = c.id
+      WHERE p.deleted_at IS NULL
+        AND NOT (e.scholarship = 1 AND p.final_amount = 0)
+      GROUP BY c.id, c.name
+      ORDER BY total_expected DESC
+    `).all();
 
-      SUM(
-        CASE 
-          WHEN p.status = 'paid' THEN p.final_amount
-          ELSE 0
-        END
-      ) as total_paid,
-
-      SUM(
-        CASE 
-          WHEN p.status = 'pending'
-               AND date(p.competence_year || '-' || printf('%02d', p.competence_month) || '-10') >= date('now')
-          THEN p.final_amount
-          ELSE 0
-        END
-      ) as total_pending,
-
-      SUM(
-        CASE 
-          WHEN p.status = 'pending'
-               AND date(p.competence_year || '-' || printf('%02d', p.competence_month) || '-10') < date('now')
-          THEN p.final_amount
-          ELSE 0
-        END
-      ) as total_overdue
-
-    FROM payments p
-    WHERE p.deleted_at IS NULL
-  `).all();
-
-  return Response.json({
-    success: true,
-    data: results[0],
-  });
-}
-
-// =========================
-// RECEITA POR TURMA
-// =========================
-if (
-  url.pathname === "/api/v1/payments/by-class" &&
-  request.method === "GET"
-) {
-  // 🔓 liberar leitura para qualquer usuário autenticado
-// (dashboard precisa disso)
-
-  const { results } = await env.DB.prepare(`
-    SELECT
-      c.id as class_id,
-      c.name as class_name,
-
-      SUM(p.final_amount) as total_expected,
-
-      SUM(
-        CASE 
-          WHEN p.status = 'paid' THEN p.final_amount
-          ELSE 0
-        END
-      ) as total_received,
-
-      SUM(
-        CASE 
-          WHEN p.status = 'pending'
-               AND date(p.due_date) < date('now')
-          THEN p.final_amount
-          ELSE 0
-        END
-      ) as total_overdue
-
-    FROM payments p
-    JOIN enrollments e ON p.enrollment_id = e.id
-    JOIN classes c ON e.class_id = c.id
-
-    WHERE p.deleted_at IS NULL
-
-    GROUP BY c.id, c.name
-    ORDER BY total_expected DESC
-  `).all();
-
-  return Response.json({
-    success: true,
-    data: results,
-  });
-}
+    return Response.json({ success: true, data: results });
+  }
 
   return null;
 }
