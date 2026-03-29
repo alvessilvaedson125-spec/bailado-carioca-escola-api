@@ -1,0 +1,1 @@
+ALTER TABLE enrollments ADD COLUMN scholarship INTEGER NOT NULL DEFAULT 0;

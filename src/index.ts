@@ -8,6 +8,7 @@ import { handleUnitsRoutes } from "./modules/units/units.routes";
 import { handleTeachersRoutes } from "./modules/teachers/teachers.routes"
 import { cashRoutes } from "./modules/payments/cash.routes";
 import { handleAdminRoutes } from "./modules/admin/admin.routes";
+import { handleAttendanceRoutes } from "./modules/attendance/attendance.routes";
 
 function corsHeaders() {
   return {
@@ -145,6 +146,18 @@ const adminResponse = await handleAdminRoutes(
   url,
   user
 );
+
+// =========================
+// ATTENDANCE
+// =========================
+const attendanceResponse = await handleAttendanceRoutes(
+  request,
+  env,
+  url,
+  user
+);
+
+if (attendanceResponse) return withCors(attendanceResponse);
 
 if (adminResponse) return withCors(adminResponse);
 
