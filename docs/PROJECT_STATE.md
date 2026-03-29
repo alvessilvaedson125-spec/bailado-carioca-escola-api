@@ -1,14 +1,29 @@
+# Bailado Carioca — Gestão Escolar
+## Documento de Estado do Projeto (PROJECT_STATE)
+
+> **Versão:** 2.0 — Março 2026
+> **Status:** Produção ativa
+> **Classificação:** SaaS de gestão especializada
+
+---
 
 # 🧭 1. VISÃO ESTRATÉGICA
 
-O sistema **Bailado Carioca – Gestão Escolar** evoluiu para um **SaaS modular em estado de produção**, com base arquitetural preparada para:
+O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gestão para escolas de dança, em operação ativa em produção. O sistema superou o estágio de CRUD e opera como plataforma de gestão financeira e operacional especializada.
 
-* Operação multiusuário (ativa)
-* Expansão multiunidade (suportada)
-* Escalabilidade comercial (SaaS)
-* Gestão financeira estruturada e auditável
+## Capacidades atuais
 
-O sistema já ultrapassa o estágio de CRUD e opera como **plataforma de gestão especializada**.
+| Capacidade | Status |
+|---|---|
+| Operação multiusuário com RBAC | ✅ Ativo |
+| Expansão multiunidade | ✅ Suportado |
+| Motor financeiro com DRE | ✅ Implementado |
+| Geração automática de mensalidades | ✅ Implementado |
+| Dashboard executivo com KPIs | ✅ Implementado |
+| Relatórios filtráveis por período e turma | ✅ Implementado |
+| Autenticação JWT com HMAC SHA-256 | ✅ Implementado |
+| Paginação nas tabelas principais | ✅ Implementado |
+| Módulo de administração de usuários | ✅ Implementado |
 
 ---
 
@@ -16,532 +31,509 @@ O sistema já ultrapassa o estágio de CRUD e opera como **plataforma de gestão
 
 ## 2.1 Backend como fonte única da verdade
 
-* Nenhuma regra crítica reside no frontend
-* Toda validação e lógica de negócio são centralizadas no backend
-* O frontend é estritamente uma camada de apresentação
-
----
+- Nenhuma regra crítica reside no frontend
+- Toda validação e lógica de negócio são centralizadas no backend
+- O frontend é estritamente uma camada de apresentação
+- IDs são tratados como **strings (UUID)** em todas as camadas — conversão numérica é proibida
 
 ## 2.2 Separação de responsabilidades
 
-| Camada  | Responsabilidade               |
-| ------- | ------------------------------ |
-| Auth    | Sessão e identidade            |
-| Domínio | Regras de negócio              |
-| Infra   | Comunicação (API, fetch, etc.) |
-| UI      | Renderização                   |
-
----
+| Camada | Responsabilidade |
+|---|---|
+| Auth | Sessão e identidade |
+| Domínio | Regras de negócio |
+| Infra | Comunicação (API, fetch) |
+| UI | Renderização e interação |
 
 ## 2.3 Controle de fluxo determinístico
 
-* Nenhuma decisão crítica deve ocorrer em múltiplos pontos
-* Navegação e autenticação possuem **pontos únicos de decisão**
-
----
+- Nenhuma decisão crítica ocorre em múltiplos pontos
+- Navegação e autenticação possuem pontos únicos de decisão
+- `auth.js` é o único responsável por redirecionamento de sessão
+- `api.js` não manipula `window.location` em nenhuma circunstância
 
 ## 2.4 Evolução sem ruptura
 
-* Deploy incremental
-* Versionamento disciplinado
-* Migrações idempotentes
-* Compatibilidade retroativa sempre que possível
-
----
+- Deploy incremental
+- Versionamento disciplinado com commits atômicos por feature
+- Migrações idempotentes
+- Compatibilidade retroativa sempre que possível
 
 ## 2.5 Segurança progressiva
 
-* JWT (em transição para assinatura real)
-* RBAC ativo
-* Expiração baseada em status HTTP (401)
-* Controle de sessão centralizado
+- JWT assinado com **HMAC SHA-256** via `crypto.subtle` (Web Crypto API)
+- Expiração em segundos (padrão RFC 7519)
+- RBAC ativo com perfis `admin` e `operator`
+- Expiração de sessão baseada em status HTTP 401
+- Controle de sessão centralizado em `auth.js`
+
+## 2.6 Regra de ouro de engenharia
+
+```
+Um passo por vez
+Commit antes de mudar
+Testar antes de avançar
+Nunca quebrar fluxo existente
+```
 
 ---
 
 # 🧱 3. ARQUITETURA DO SISTEMA
 
----
+## 3.1 Stack Tecnológico
 
-## 🔹 3.1 FRONTEND — SPA CONTROLADA
+### Frontend
+| Camada | Tecnologia |
+|---|---|
+| Linguagem | HTML + CSS + JavaScript puro |
+| Hospedagem | Cloudflare Pages |
+| Arquitetura | SPA manual com router custom |
+| Estilização | CSS modular por página + componentes globais |
 
-### Stack
+### Backend
+| Camada | Tecnologia |
+|---|---|
+| Runtime | Cloudflare Workers (edge serverless) |
+| Linguagem | TypeScript |
+| Banco de dados | Cloudflare D1 (SQLite serverless) |
+| Autenticação | JWT HMAC SHA-256 (crypto.subtle) |
 
-* HTML + CSS + JavaScript puro
-* Cloudflare Pages
-* Arquitetura SPA manual (router custom)
+## 3.2 Estrutura do Frontend
 
----
-
-## 🔒 3.1.1 Pipeline de execução (OBRIGATÓRIO)
-
-Ordem de carregamento:
-
-```html
-CORE → AUTH → ROUTER → MÓDULOS → DASHBOARD
+```
+bailado-carioca-erp-front/
+├── css/
+│   ├── pages/
+│   │   ├── admin.css
+│   │   ├── cash.css
+│   │   ├── classes.css
+│   │   ├── dashboard.css
+│   │   ├── enrollments.css
+│   │   ├── finance.css
+│   │   ├── login.css
+│   │   ├── reports.css
+│   │   ├── students.css
+│   │   ├── teachers.css
+│   │   └── units.css
+│   ├── base.css
+│   ├── components.css
+│   ├── layout.css
+│   ├── style.css          ← ponto de entrada CSS
+│   └── variables.css
+├── js/
+│   ├── api.js             ← camada de comunicação
+│   ├── auth.js            ← sessão e identidade
+│   ├── cash.js
+│   ├── classes.js
+│   ├── dashboard.js
+│   ├── enrollments.js
+│   ├── finance.js         ← motor de cálculo financeiro
+│   ├── payments.js
+│   ├── reports.js
+│   ├── router.js          ← roteamento SPA
+│   ├── students.js
+│   ├── teachers.js
+│   ├── toast.js           ← sistema de notificações
+│   ├── units.js
+│   └── utils.js
+├── admin.html
+├── app.html               ← shell principal do SPA
+├── cash.html
+├── classes.html
+├── dashboard.html
+├── enrollments.html
+├── index.html             ← login (contexto isolado)
+├── payments.html
+├── reports.html
+├── students.html
+├── teachers.html
+└── units.html
 ```
 
-### Garantias:
+## 3.3 Estrutura do Backend
 
-* Evita race conditions
-* Evita execução fora de ordem
-* Mantém previsibilidade total
-
----
-
-## 🔒 3.1.2 Isolamento de contextos
-
-### index.html (login)
-
-* NÃO executa router
-* NÃO chama `/auth/me`
-* Responsável apenas por autenticação inicial
-
-### app.html (sistema)
-
-* Executa router
-* Executa validação de sessão
-* Renderiza módulos
-
----
-
-## 🔒 3.1.3 Fluxo oficial de autenticação
-
-```txt
-Login → Token → App → /auth/me → Renderização
+```
+bailado-carioca-escola-api/
+├── src/
+│   ├── modules/
+│   │   ├── admin/
+│   │   │   └── admin.routes.ts      ← CRUD usuários + troca de senha
+│   │   ├── auth/
+│   │   │   └── auth.routes.ts       ← login, register, /me
+│   │   ├── classes/
+│   │   │   └── classes.routes.ts
+│   │   ├── enrollments/
+│   │   │   └── enrollments.routes.ts
+│   │   ├── payments/
+│   │   │   ├── payments.routes.ts   ← geração, filtros, summary, by-class
+│   │   │   ├── payments.service.ts  ← geração automática de mensalidades
+│   │   │   ├── cash.routes.ts
+│   │   │   └── cash.service.ts
+│   │   ├── students/
+│   │   │   └── students.routes.ts
+│   │   ├── teachers/
+│   │   │   └── teachers.routes.ts
+│   │   └── units/
+│   │       └── units.routes.ts
+│   ├── security/
+│   │   ├── authorize.ts             ← requireAuth, requireRole
+│   │   └── jwt.ts                   ← generateJWT, verifyJWT (HMAC SHA-256)
+│   └── index.ts                     ← entry point do Worker
+├── migrations/
+├── docs/
+│   └── PROJECT_STATE.md
+└── wrangler.jsonc
 ```
 
----
+## 3.4 Pipeline de execução do SPA (OBRIGATÓRIO)
 
-## 🔒 3.1.4 Gestão de sessão
-
-* Token armazenado em `localStorage`
-* Validação sempre via backend
-* 401 → invalidação de sessão
-
----
-
-## ⚠️ 3.1.5 HARDENING DE SPA (CRÍTICO)
-
-Durante a evolução, foi identificado e corrigido um risco estrutural clássico:
-
-### 🔥 Problema identificado
-
-* Loop de autenticação
-* Re-render contínuo
-* Chamadas repetidas ao backend
-* Conflito entre camadas (API vs Auth vs Router)
-
----
-
-### ✅ Padrões obrigatórios definidos
-
-#### 🔒 Single source of redirect
-
-Apenas **auth.js** pode redirecionar:
-
-```txt
-auth.js → único responsável por navegação de sessão
+```
+CORE (toast, utils, api, auth) → ROUTER → MÓDULOS → DASHBOARD
 ```
 
-❌ api.js NÃO redireciona
-❌ router.js NÃO redireciona
+**Garantias:**
+- Evita race conditions entre módulos
+- Evita execução fora de ordem
+- Mantém previsibilidade total do estado da aplicação
 
----
+## 3.5 Isolamento de contextos
 
-#### 🔒 API desacoplada de navegação
+### `index.html` (login)
+- NÃO executa router
+- NÃO chama `/auth/me`
+- Responsável apenas pela autenticação inicial
 
-* api.js NÃO manipula `window.location`
-* api.js apenas:
+### `app.html` (sistema)
+- Executa router após validação de sessão
+- Renderiza módulos sob demanda
+- Gerencia ciclo de vida da sessão
 
-  * envia requisição
-  * retorna dados
-  * lança erro
+## 3.6 Fluxo oficial de autenticação
 
----
-
-#### 🔒 Controle de chamadas de sessão
-
-* `/auth/me`:
-
-  * executa 1 vez por carregamento
-  * nunca em loop
-  * nunca no login
-
----
-
-#### 🔒 Proteção contra re-execução
-
-* Router executa apenas após validação
-* Eventos são controlados (sem duplicação)
-* Uso de flags (`isLoading`) para evitar concorrência
-
----
-
-## 🔹 3.2 BACKEND — SERVERLESS MODULAR
-
-### Stack
-
-* Cloudflare Workers
-* TypeScript
-* D1 (SQLite serverless)
-* Arquitetura modular
-
----
-
-## 📦 3.2.1 Estrutura
-
-```bash
-src/
-  modules/
-    auth/
-    students/
-    classes/
-    enrollments/
-    payments/
-    cash/
-  middleware/
-    auth.ts
-    rbac.ts
-  db/
-  utils/
+```
+Login → JWT Token → localStorage → app.html → /auth/me → Renderização
 ```
 
----
-
-## 🔐 3.2.2 Autenticação
-
-### Atual
-
-* JWT simples
-
-### Evolução planejada
-
-* JWT assinado (HMAC/RSA)
-* Verificação criptográfica
-* Refresh token (opcional)
+### Regras invioláveis
+- `auth.js` é o único ponto de redirect de sessão
+- `api.js` apenas envia requisições, retorna dados e lança erros
+- `/auth/me` executa **uma vez** por carregamento, nunca em loop
 
 ---
 
-## 🔐 3.2.3 RBAC
+# 🔐 4. SEGURANÇA
 
-Perfis atuais:
+## 4.1 Autenticação JWT
 
-* admin
-* operator
+O sistema utiliza JWT com assinatura **HMAC SHA-256** via `crypto.subtle` (Web Crypto API nativa do Cloudflare Workers).
 
-Expansão futura:
+```typescript
+// Geração
+const key = await crypto.subtle.importKey(
+  "raw",
+  encoder.encode(secret),
+  { name: "HMAC", hash: "SHA-256" },
+  false,
+  ["sign"]
+);
 
-* teacher
-* financeiro
-
----
-
-# 🧩 4. MODELO DE DOMÍNIO
-
----
-
-## 🔗 Pipeline central
-
-```txt
-Students → Enrollments → Payments → Cash → Dashboard
+// Verificação criptográfica obrigatória antes de aceitar qualquer token
+const valid = await crypto.subtle.verify("HMAC", key, signature, data);
 ```
 
----
+**Padrões aplicados:**
+- Expiração em **segundos** (padrão RFC 7519)
+- Verificação de assinatura antes de aceitar payload
+- Validação de `exp` em toda requisição autenticada
+- `JWT_SECRET` armazenado como Cloudflare Worker Secret (nunca no código)
 
-## 💡 Característica-chave
+## 4.2 RBAC
 
-O sistema já implementa:
+| Perfil | Permissões |
+|---|---|
+| `admin` | Leitura e escrita em todos os módulos, gestão de usuários |
+| `operator` | Leitura geral, sem acesso a administração |
 
-* Motor financeiro estruturado
-* Congelamento de valores
-* Geração automática de mensalidades
-* DRE operacional
+**Expansão planejada:** perfis `teacher` e `financeiro`
 
-👉 Isso caracteriza um **SaaS de gestão real**, não apenas CRUD.
+## 4.3 Proteções implementadas
 
----
-
-# 💰 5. ARQUITETURA FINANCEIRA
-
----
-
-## 📌 Modelo de pagamentos
-
-Campos:
-
-* gross_amount
-* discount_percent
-* discount_amount
-* final_amount
-* status
+- Soft delete em todas as entidades (`deleted_at`)
+- Imutabilidade de valores financeiros após geração
+- Verificação de duplicidade em pagamentos
+- Admin não pode desativar a própria conta
+- Validação de transições de estado em pagamentos (pending → paid apenas)
 
 ---
 
-## ✔️ Regra crítica
+# 🧩 5. MODELO DE DOMÍNIO
 
-* Valores são imutáveis após geração
-* Garante integridade contábil
+## Pipeline central
 
----
+```
+Students → Enrollments → Payments → Cash → Dashboard/Reports
+```
 
-## 📊 DRE
+## Entidades principais
 
-* Receitas
-* Despesas
-* Resultado
+### Students (Alunos)
+- Status derivado: ativo se possui matrícula ativa
+- Navegação direta para matrículas do aluno via botão "Ver"
 
-✔ Já implementado
+### Enrollments (Matrículas)
+- Vínculo entre aluno e turma
+- Campos financeiros: `monthly_fee`, `discount`, `final_price`
+- Status: `active`, `inactive`, `cancelled`
+- Regra: um aluno não pode ter duas matrículas na mesma turma
 
----
+### Payments (Pagamentos)
+- Gerados automaticamente a partir de matrículas ativas
+- Campos: `gross_amount`, `discount_percent`, `discount_amount`, `final_amount`
+- Status computado: `paid`, `pending`, `overdue`
+- **Valores são imutáveis após geração** — garantia de integridade contábil
+- `due_date` calculado como dia 7 do mês de competência
 
-# ⚠️ 6. PONTOS CRÍTICOS DE ARQUITETURA
+### Cash (Caixa)
+- Movimentações manuais de entrada e saída
+- Cancelamento via soft delete
+- Saldo = entradas - saídas
 
----
-
-## 6.1 Controle de fluxo SPA
-
-Risco:
-
-* múltiplos controladores de navegação
-
-Mitigação:
-
-* centralização em auth.js
-
----
-
-## 6.2 Execução de scripts
-
-Risco:
-
-* ordem incorreta → comportamento imprevisível
-
-Mitigação:
-
-* pipeline fixo documentado
+### Classes (Turmas)
+- Suporte a múltiplos professores por turma
+- Vinculada a unidade e professor
+- Contador de condutores e conduzidas
 
 ---
 
-## 6.3 Acoplamento front-back
+# 💰 6. ARQUITETURA FINANCEIRA
 
-Risco:
+## Motor de cálculo (`finance.js`)
 
-* lógica duplicada
-* inconsistência
+Função centralizada `calculateFinance({ payments, cash })` que retorna:
 
-Mitigação:
+```javascript
+{
+  receita: {
+    esperado,   // soma de todos os pagamentos
+    recebido,   // soma dos pagamentos com status 'paid'
+    projetado,  // recebido + pendentes não vencidos
+    pendente    // pendentes não vencidos
+  },
+  inadimplencia: {
+    atrasado,     // pendentes vencidos
+    defaultRate   // (atrasado / esperado) * 100
+  },
+  caixa: {
+    entries,  // soma das entradas manuais
+    exits,    // soma das saídas manuais
+    balance   // entries - exits
+  },
+  total  // recebido + balance
+}
+```
 
-* backend como fonte única
+## DRE Operacional
 
----
+| Componente | Fonte |
+|---|---|
+| Receita esperada | Soma de todos os `final_amount` |
+| Receita recebida | Pagamentos com `status = 'paid'` |
+| Inadimplência | Pagamentos `pending` com `due_date` vencido |
+| Caixa | Movimentações manuais |
+| Total consolidado | Recebido + Saldo de Caixa |
 
-## 6.4 Infra vs Domínio
+## Geração automática de mensalidades
 
-Risco:
-
-* API controlando fluxo de UI
-
-Mitigação:
-
-* api.js desacoplado (sem redirect)
-
----
-
- ## 6.5 Integridade de Tipos entre Camadas (CRÍTICO)
-Problema identificado
-
-Durante a implementação da navegação entre módulos (Students → Enrollments), foi identificado um erro crítico de tipagem:
-
-const studentId = Number(selectedStudentId);
-
-O sistema utiliza IDs como string (UUID), porém houve tentativa de conversão para número.
-
-Efeito observado
-
-Exemplo real:
-
-selectedStudentId = "c7b8-uuid"
-Number("c7b8-uuid") → NaN
-
-Impacto direto:
-
-String(e.student_id) === String(studentId)
-
-Se torna:
-
-"c7b8-uuid" === "NaN"
-
-Consequências:
-
-Filtros retornando listas vazias
-Tela de matrículas sem dados
-Quebra de fluxo entre módulos
-Falso diagnóstico de erro de API/backend
-Causa raiz
-
-Violação de contrato de tipo:
-
-Frontend assumindo número
-Backend operando com string (UUID)
-Correção aplicada
-
-Substituição direta:
-
-const studentId = Number(selectedStudentId);
-
-por:
-
-const studentId = selectedStudentId;
-Resultado
-Filtro funcional restaurado
-Navegação entre módulos estabilizada
-Dados corretamente associados
-Eliminação de falsos negativos no frontend
-Regra arquitetural definida (OBRIGATÓRIA)
-IDs são tratados como strings em TODAS as camadas
-
-Proibido:
-
-Number(id)
-parseInt(id)
-qualquer coerção implícita
-Justificativa técnica
-
-O sistema utiliza:
-
-UUID
-IDs não sequenciais
-Identificadores externos
-
-Logo:
-
-Conversão numérica destrói a identidade do dado
-Classificação do problema
-Tipo	Nível
-Bug de tipagem	Crítico
-Impacto	Alto
-Detecção	Difícil (silencioso)
-Aprendizado consolidado
-Erros de tipo não geram exceção → geram inconsistência silenciosa
-
-Isso é mais perigoso que erro explícito.
-
-🎯 IMPACTO ARQUITETURAL (IMPORTANTE)
-
-Esse ajuste reforça diretamente:
-
-✔ Backend como fonte da verdade
-✔ Tipagem consistente entre camadas
-✔ Previsibilidade de filtros e queries
-✔ Integridade do domínio
-
-## 6.6 Incidentes Críticos Resolvidos
-
-
-### 🔥 Incidente 1 — Race condition no router
-
-- Sintoma: tela travando em "Carregando..."
-- Causa: init executando antes do módulo carregar
-- Correção: waitForModule()
-- Impacto: estabilidade do SPA restaurada
+- Endpoint: `POST /api/v1/payments/generate`
+- Parâmetros: `competence_month`, `competence_year`
+- Comportamento: gera para todas as matrículas ativas, ignora duplicatas
+- Retorno: `{ generated, skipped }`
 
 ---
 
-### 🔥 Incidente 2 — RBAC bloqueando enrollments
+# 🖥️ 7. MÓDULOS DO SISTEMA
 
-- Sintoma: 403 na API
-- Causa: requireRole restritivo
-- Correção: ajuste de permissões
-- Impacto: fluxo de dados restabelecido
+## Dashboard
+- KPIs de decisão: Recebido, Esperado, Eficiência, Inadimplência
+- Saúde do negócio: Caixa, Total Consolidado, Status Geral
+- Gráfico: Recebido vs Esperado — últimos 6 meses
+- Ranking de turmas por eficiência de cobrança
+- Filtro de período (mês/ano)
+- Estado de onboarding para sistema vazio
 
----
+## Relatórios
+- KPIs financeiros detalhados
+- Gauge de eficiência de cobrança (Recebido / Pendente / Inadimplente)
+- Ranking de turmas com badge de performance
+- Tabela de pagamentos ordenada por risco (vencido → pendente → pago)
+- Filtros: mês, ano, turma
+- Linhas vencidas destacadas em vermelho
 
-### 🔥 Incidente 3 — Hash incorreto (#/enrollments)
+## Alunos
+- Lista com status derivado de matrículas ativas
+- Busca por nome e email
+- Paginação (15 por página)
+- Navegação direta para matrículas do aluno
 
-- Sintoma: módulo não carregava
-- Causa: rota incompatível com router
-- Correção: uso de window.location.hash
-- Impacto: navegação estabilizada
+## Matrículas
+- Vínculo aluno-turma com papel (condutor/conduzida)
+- Gestão financeira por matrícula (mensalidade + desconto)
+- Paginação (15 por página)
+- Edição e cancelamento funcionais
 
----
+## Pagamentos
+- Geração em lote por competência
+- Filtro por mês/ano
+- Paginação (15 por página)
+- Marcação de pagamento com Toast de confirmação
 
-### 🔥 Incidente 4 — Tipagem de ID (CRÍTICO)
+## Caixa
+- Movimentações manuais de entrada e saída
+- Filtro por tipo e descrição
+- Cancelamento de movimentações
+- Saldo em tempo real
 
-- Sintoma: dados não apareciam
-- Causa: Number() em UUID
-- Correção: uso de string
-- Impacto: correção total do fluxo
+## Turmas
+- Suporte a múltiplos professores
+- Vinculação com unidade
+- Contagem de condutores e conduzidas
 
-# 🚀 7. ROADMAP EVOLUTIVO
-
----
-
-## 🔥 Curto prazo
-
-* Estabilização completa do SPA
-* Padronização de navegação
-* Auditoria completa pós-auth (conforme sua regra)
-
----
-
-## 🔥 Médio prazo
-
-* JWT assinado (obrigatório)
-* Logs estruturados
-* Observabilidade (erros e uso)
-
----
-
-## 🔥 Longo prazo
-
-* Multi-tenant real
-* Billing SaaS
-* Planos e cobrança recorrente
-
----
-
-# 🧠 8. PADRÃO DE ENGENHARIA
-
----
-
-## 🔒 Regra de ouro (oficial do projeto)
-
-* Um passo por vez
-* Commit antes de mudar
-* Testar antes de avançar
-* Nunca quebrar fluxo existente
+## Administração
+- CRUD de usuários do sistema
+- Criação de perfis `admin` e `operator`
+- Desativação de usuários (soft delete)
+- Troca de senha com validação da senha atual
+- Proteção: admin não pode desativar a própria conta
 
 ---
 
-## 🔄 Processo padrão
+# ⚠️ 8. INCIDENTES CRÍTICOS RESOLVIDOS
 
-1. Diagnóstico
-2. Proposta
-3. Aprovação
-4. Execução controlada
+## 8.1 Race condition no router
+| Campo | Detalhe |
+|---|---|
+| Sintoma | Tela travando em "Carregando..." |
+| Causa | `init()` executando antes do módulo carregar |
+| Correção | `waitForModule()` com polling de 10ms |
+| Impacto | Estabilidade do SPA restaurada |
+
+## 8.2 RBAC bloqueando enrollments
+| Campo | Detalhe |
+|---|---|
+| Sintoma | 403 na API de matrículas |
+| Causa | `requireRole` com restrição excessiva |
+| Correção | Ajuste de permissões por endpoint |
+| Impacto | Fluxo de dados restabelecido |
+
+## 8.3 Hash de rota incorreto
+| Campo | Detalhe |
+|---|---|
+| Sintoma | Módulo não carregava ao navegar |
+| Causa | Rota `#/enrollments` incompatível com router |
+| Correção | Uso de `window.location.hash` sem barra |
+| Impacto | Navegação entre módulos estabilizada |
+
+## 8.4 Tipagem de ID (CRÍTICO)
+| Campo | Detalhe |
+|---|---|
+| Sintoma | Dados não apareciam na tela de matrículas |
+| Causa | `Number(uuid)` retornando `NaN` |
+| Correção | IDs mantidos como string em todas as camadas |
+| Impacto | Correção total do fluxo Students → Enrollments |
+
+**Regra arquitetural derivada (OBRIGATÓRIA):**
+```
+IDs são strings UUID em todas as camadas.
+Proibido: Number(id), parseInt(id), qualquer coerção implícita.
+```
+
+## 8.5 Bug de competência (ano 2620)
+| Campo | Detalhe |
+|---|---|
+| Sintoma | Pagamentos gerados com ano 2620 |
+| Causa | Campo vazio enviado como string — `"" \|\| fallback` falhou |
+| Correção | Validação explícita de string vazia antes do fallback |
+| Impacto | Integridade dos dados financeiros restaurada |
+
+## 8.6 Loop de autenticação
+| Campo | Detalhe |
+|---|---|
+| Sintoma | Loop infinito de redirecionamentos |
+| Causa | Múltiplos pontos de redirect em api.js, router.js e auth.js |
+| Correção | Centralização total de redirect em auth.js |
+| Impacto | Fluxo de autenticação estabilizado |
 
 ---
 
-# 🏁 9. STATUS ATUAL DO SISTEMA
+# 🚀 9. ROADMAP EVOLUTIVO
 
-| Área        | Status          |
-| ----------- | --------------- |
-| Backend     | 🟢 Estável      |
-| Financeiro  | 🟢 Avançado     |
-| Deploy      | 🟢 Estável      |
-| Frontend    | 🟢 Estabilizado |
-| Auth Flow   | 🟢 Hardened     |
-| Arquitetura | 🟢 Sólida       |
+## Curto prazo
+- [ ] Refresh token (extensão de sessão sem novo login)
+- [ ] Logs estruturados no backend
+- [ ] Filtro por unidade nos relatórios
+
+## Médio prazo
+- [ ] Observabilidade (erros e uso via Cloudflare Analytics)
+- [ ] Perfis `teacher` e `financeiro` no RBAC
+- [ ] Exportação de relatórios em PDF/CSV
+- [ ] Notificações de inadimplência
+
+## Longo prazo
+- [ ] Multi-tenant real (múltiplas escolas)
+- [ ] Billing SaaS (planos e cobrança recorrente)
+- [ ] App mobile (PWA ou nativo)
+- [ ] Integração com gateway de pagamento
 
 ---
 
-# 📌 10. NOTA TÉCNICA FINAL
+# 🏁 10. STATUS ATUAL DO SISTEMA
 
-O sistema passou recentemente por um processo de **hardenização crítica do fluxo SPA**, resolvendo:
+| Área | Status | Detalhe |
+|---|---|---|
+| Backend | 🟢 Estável | Todos os módulos em produção |
+| Autenticação | 🟢 Hardened | JWT HMAC SHA-256, RBAC ativo |
+| Frontend | 🟢 Estabilizado | SPA sem race conditions |
+| Financeiro | 🟢 Avançado | DRE + geração automática |
+| Deploy | 🟢 Estável | Cloudflare Pages + Workers |
+| Arquitetura | 🟢 Sólida | Separação clara de camadas |
+| UX | 🟢 Profissional | Toast, paginação, loading states |
+| Documentação | 🟢 Atualizada | Este documento |
 
-* loops de autenticação
-* conflitos entre camadas
-* redirects concorrentes
-* instabilidade de renderização
+---
 
-👉 Isso elevou o projeto para um nível de **arquitetura confiável para produção SaaS**.
+# 📋 11. PROCESSO DE DESENVOLVIMENTO
+
+## Fluxo padrão para qualquer mudança
+
+```
+1. Diagnóstico — entender o problema antes de codar
+2. Proposta — definir a solução e os arquivos afetados
+3. Aprovação — validar com o responsável
+4. Execução controlada — um arquivo por vez
+5. Commit — mensagem descritiva por feature
+6. Deploy — verificar em produção
+```
+
+## Padrão de commit
+
+```
+feat: nova funcionalidade
+fix: correção de bug
+refactor: melhoria sem mudança de comportamento
+docs: atualização de documentação
+```
+
+## Regras invioláveis
+
+- Nunca commitar código não testado
+- Nunca modificar múltiplos módulos em um único commit sem necessidade
+- Nunca usar `alert()` — usar `Toast`
+- Nunca usar `onclick` inline no HTML — eventos via JS
+- Nunca converter IDs com `Number()` ou `parseInt()`
+- Nunca fazer redirect fora do `auth.js`
+- Nunca armazenar `JWT_SECRET` no código — usar Cloudflare Secrets
+
+---
+
+*Documento mantido pelo time de desenvolvimento.*
+*Última atualização: Março 2026*
