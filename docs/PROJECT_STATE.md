@@ -1,7 +1,7 @@
 # Bailado Carioca — Gestão Escolar
 ## Documento de Estado do Projeto (PROJECT_STATE)
 
-> **Versão:** 2.0 — Março 2026
+> **Versão:** 3.0 — Março 2026
 > **Status:** Produção ativa
 > **Classificação:** SaaS de gestão especializada
 
@@ -21,9 +21,18 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 | Geração automática de mensalidades | ✅ Implementado |
 | Dashboard executivo com KPIs | ✅ Implementado |
 | Relatórios filtráveis por período e turma | ✅ Implementado |
+| Exportação CSV e PDF | ✅ Implementado |
 | Autenticação JWT com HMAC SHA-256 | ✅ Implementado |
 | Paginação nas tabelas principais | ✅ Implementado |
 | Módulo de administração de usuários | ✅ Implementado |
+| Módulo de presença (chamada) | ✅ Implementado |
+| Frequência média no dashboard | ✅ Implementado |
+| Bolsistas com formulário separado | ✅ Implementado |
+| Impacto financeiro de bolsas | ✅ Implementado |
+| Layout por turma nas matrículas | ✅ Implementado |
+| Responsividade mobile/tablet | ✅ Implementado |
+| Nome do usuário logado no header | ✅ Implementado |
+| Register bloqueado após primeiro admin | ✅ Implementado |
 
 ---
 
@@ -62,13 +71,14 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 ## 2.5 Segurança progressiva
 
 - JWT assinado com **HMAC SHA-256** via `crypto.subtle` (Web Crypto API)
-- Expiração em segundos (padrão RFC 7519)
+- Expiração em **8 horas** (segundos, padrão RFC 7519)
 - RBAC ativo com perfis `admin` e `operator`
 - Expiração de sessão baseada em status HTTP 401
-- Controle de sessão centralizado em `auth.js`
+- Controle de sessão centralizado em `router.js` (checkAuth)
+- Register público bloqueado após criação do primeiro admin
+- Cash routes exigem autenticação obrigatória
 
 ## 2.6 Regra de ouro de engenharia
-
 ```
 Um passo por vez
 Commit antes de mudar
@@ -95,54 +105,57 @@ Nunca quebrar fluxo existente
 |---|---|
 | Runtime | Cloudflare Workers (edge serverless) |
 | Linguagem | TypeScript |
-| Banco de dados | Cloudflare D1 (SQLite serverless) |
+| Banco de dados | Cloudflare D1 (SQLite serverless) — `bailado_carioca_escola_db` (UUID: 081c69b7-c6ad-441b-98b7-84c555b7d147) |
 | Autenticação | JWT HMAC SHA-256 (crypto.subtle) |
 
 ## 3.2 Estrutura do Frontend
-
 ```
 bailado-carioca-erp-front/
 ├── css/
 │   ├── pages/
 │   │   ├── admin.css
+│   │   ├── attendance.css
 │   │   ├── cash.css
 │   │   ├── classes.css
 │   │   ├── dashboard.css
 │   │   ├── enrollments.css
 │   │   ├── finance.css
 │   │   ├── login.css
+│   │   ├── payments.css       ← NOVO
 │   │   ├── reports.css
 │   │   ├── students.css
 │   │   ├── teachers.css
 │   │   └── units.css
 │   ├── base.css
 │   ├── components.css
-│   ├── layout.css
-│   ├── style.css          ← ponto de entrada CSS
+│   ├── layout.css             ← responsividade mobile/tablet
+│   ├── style.css
 │   └── variables.css
 ├── js/
-│   ├── api.js             ← camada de comunicação
-│   ├── auth.js            ← sessão e identidade
+│   ├── api.js
+│   ├── auth.js                ← role salvo no localStorage
+│   ├── attendance.js          ← NOVO
 │   ├── cash.js
 │   ├── classes.js
 │   ├── dashboard.js
-│   ├── enrollments.js
-│   ├── finance.js         ← motor de cálculo financeiro
+│   ├── enrollments.js         ← abas Matrículas/Bolsistas
+│   ├── finance.js             ← bolsistas integrais excluídos
 │   ├── payments.js
 │   ├── reports.js
-│   ├── router.js          ← roteamento SPA
+│   ├── router.js              ← checkAuth com name+role, menu RBAC
 │   ├── students.js
 │   ├── teachers.js
-│   ├── toast.js           ← sistema de notificações
+│   ├── toast.js
 │   ├── units.js
 │   └── utils.js
 ├── admin.html
-├── app.html               ← shell principal do SPA
+├── app.html                   ← hamburguer mobile, sidebar overlay
+├── attendance.html            ← NOVO
 ├── cash.html
 ├── classes.html
 ├── dashboard.html
-├── enrollments.html
-├── index.html             ← login (contexto isolado)
+├── enrollments.html           ← abas + modal bolsa separado
+├── index.html
 ├── payments.html
 ├── reports.html
 ├── students.html
@@ -151,73 +164,42 @@ bailado-carioca-erp-front/
 ```
 
 ## 3.3 Estrutura do Backend
-
 ```
 bailado-carioca-escola-api/
 ├── src/
 │   ├── modules/
 │   │   ├── admin/
-│   │   │   └── admin.routes.ts      ← CRUD usuários + troca de senha
+│   │   │   └── admin.routes.ts
+│   │   ├── attendance/
+│   │   │   └── attendance.routes.ts   ← NOVO — chamada + /dashboard
 │   │   ├── auth/
-│   │   │   └── auth.routes.ts       ← login, register, /me
+│   │   │   └── auth.routes.ts         ← register bloqueado, name no /me
 │   │   ├── classes/
 │   │   │   └── classes.routes.ts
 │   │   ├── enrollments/
-│   │   │   └── enrollments.routes.ts
+│   │   │   └── enrollments.routes.ts  ← JOIN com units, operator pode criar
 │   │   ├── payments/
-│   │   │   ├── payments.routes.ts   ← geração, filtros, summary, by-class
-│   │   │   ├── payments.service.ts  ← geração automática de mensalidades
-│   │   │   ├── cash.routes.ts
-│   │   │   └── cash.service.ts
+│   │   │   ├── payments.routes.ts
+│   │   │   ├── payments.service.ts    ← bolsistas integrais pulados
+│   │   │   ├── cash.routes.ts         ← requireRole adicionado
+│   │   │   └── cash.service.ts        ← Response.json, date normalizada
 │   │   ├── students/
 │   │   │   └── students.routes.ts
 │   │   ├── teachers/
-│   │   │   └── teachers.routes.ts
+│   │   │   └── teachers.routes.ts     ← validação name, verificação existência
 │   │   └── units/
-│   │       └── units.routes.ts
+│   │       └── units.routes.ts        ← verificação existência no PUT/DELETE
 │   ├── security/
-│   │   ├── authorize.ts             ← requireAuth, requireRole
-│   │   └── jwt.ts                   ← generateJWT, verifyJWT (HMAC SHA-256)
-│   └── index.ts                     ← entry point do Worker
+│   │   ├── authorize.ts               ← requireAuth retorna Response direto
+│   │   └── jwt.ts
+│   └── index.ts                       ← ordem corrigida, cash autenticado
 ├── migrations/
+│   ├── 0001 a 0021 ...
+│   └── 0022_add_date_to_cash_entries.sql  ← NOVO
 ├── docs/
 │   └── PROJECT_STATE.md
 └── wrangler.jsonc
 ```
-
-## 3.4 Pipeline de execução do SPA (OBRIGATÓRIO)
-
-```
-CORE (toast, utils, api, auth) → ROUTER → MÓDULOS → DASHBOARD
-```
-
-**Garantias:**
-- Evita race conditions entre módulos
-- Evita execução fora de ordem
-- Mantém previsibilidade total do estado da aplicação
-
-## 3.5 Isolamento de contextos
-
-### `index.html` (login)
-- NÃO executa router
-- NÃO chama `/auth/me`
-- Responsável apenas pela autenticação inicial
-
-### `app.html` (sistema)
-- Executa router após validação de sessão
-- Renderiza módulos sob demanda
-- Gerencia ciclo de vida da sessão
-
-## 3.6 Fluxo oficial de autenticação
-
-```
-Login → JWT Token → localStorage → app.html → /auth/me → Renderização
-```
-
-### Regras invioláveis
-- `auth.js` é o único ponto de redirect de sessão
-- `api.js` apenas envia requisições, retorna dados e lança erros
-- `/auth/me` executa **uma vez** por carregamento, nunca em loop
 
 ---
 
@@ -225,264 +207,153 @@ Login → JWT Token → localStorage → app.html → /auth/me → Renderizaçã
 
 ## 4.1 Autenticação JWT
 
-O sistema utiliza JWT com assinatura **HMAC SHA-256** via `crypto.subtle` (Web Crypto API nativa do Cloudflare Workers).
-
-```typescript
-// Geração
-const key = await crypto.subtle.importKey(
-  "raw",
-  encoder.encode(secret),
-  { name: "HMAC", hash: "SHA-256" },
-  false,
-  ["sign"]
-);
-
-// Verificação criptográfica obrigatória antes de aceitar qualquer token
-const valid = await crypto.subtle.verify("HMAC", key, signature, data);
-```
-
-**Padrões aplicados:**
-- Expiração em **segundos** (padrão RFC 7519)
-- Verificação de assinatura antes de aceitar payload
-- Validação de `exp` em toda requisição autenticada
-- `JWT_SECRET` armazenado como Cloudflare Worker Secret (nunca no código)
+- Expiração: **8 horas**
+- Assinatura: HMAC SHA-256
+- `requireAuth` retorna `Response` diretamente (não `{ error: Response }`)
+- Register público bloqueado após primeiro admin criado
 
 ## 4.2 RBAC
 
 | Perfil | Permissões |
 |---|---|
 | `admin` | Leitura e escrita em todos os módulos, gestão de usuários |
-| `operator` | Leitura geral, sem acesso a administração |
+| `operator` | Leitura geral + criar/editar alunos e matrículas + marcar pagamentos + presença |
 
-**Expansão planejada:** perfis `teacher` e `financeiro`
+## 4.3 Controle de menu no frontend
 
-## 4.3 Proteções implementadas
-
-- Soft delete em todas as entidades (`deleted_at`)
-- Imutabilidade de valores financeiros após geração
-- Verificação de duplicidade em pagamentos
-- Admin não pode desativar a própria conta
-- Validação de transições de estado em pagamentos (pending → paid apenas)
+- `user_role` salvo no `localStorage` após login e atualizado em cada `checkAuth`
+- Menu "Administração" oculto para operadores via classe `.menu-admin-only`
+- `admin.js` bloqueia acesso direto para operadores com mensagem visual
 
 ---
 
 # 🧩 5. MODELO DE DOMÍNIO
 
 ## Pipeline central
-
 ```
-Students → Enrollments → Payments → Cash → Dashboard/Reports
+Students → Enrollments (regular + scholarship) → Payments → Cash → Dashboard/Reports
 ```
 
 ## Entidades principais
 
-### Students (Alunos)
-- Status derivado: ativo se possui matrícula ativa
-- Navegação direta para matrículas do aluno via botão "Ver"
-
 ### Enrollments (Matrículas)
-- Vínculo entre aluno e turma
-- Campos financeiros: `monthly_fee`, `discount`, `final_price`
-- Status: `active`, `inactive`, `cancelled`
-- Regra: um aluno não pode ter duas matrículas na mesma turma
+- **Dois fluxos separados:** matrículas regulares e bolsistas
+- Campo `scholarship` (0/1) diferencia os dois tipos
+- Bolsistas integrais (`scholarship=1 AND final_amount=0`) excluídos dos cálculos financeiros
+- 4 papéis com gênero: `conductor_m`, `conductor_f`, `follower_f`, `follower_m`
+- Layout por turma na visualização (cards agrupados)
 
-### Payments (Pagamentos)
-- Gerados automaticamente a partir de matrículas ativas
-- Campos: `gross_amount`, `discount_percent`, `discount_amount`, `final_amount`
-- Status computado: `paid`, `pending`, `overdue`
-- **Valores são imutáveis após geração** — garantia de integridade contábil
-- `due_date` calculado como dia 7 do mês de competência
+### Attendance (Presença) — NOVO
+- Tabela `attendance` criada na migration 0021
+- Registro de chamada por turma + data em lote
+- Histórico de frequência por aluno com % e badge
+- Endpoint `/api/v1/attendance/dashboard` para frequência média geral
 
 ### Cash (Caixa)
-- Movimentações manuais de entrada e saída
-- Cancelamento via soft delete
-- Saldo = entradas - saídas
-
-### Classes (Turmas)
-- Suporte a múltiplos professores por turma
-- Vinculada a unidade e professor
-- Contador de condutores e conduzidas
+- Coluna `date` adicionada na migration 0022
+- Data normalizada para `YYYY-MM-DD`
+- Verificação de existência antes de cancelar
 
 ---
 
 # 💰 6. ARQUITETURA FINANCEIRA
 
-## Motor de cálculo (`finance.js`)
+## Bolsistas
 
-Função centralizada `calculateFinance({ payments, cash })` que retorna:
+| Tipo | `scholarship` | `discount` | Impacto financeiro |
+|---|---|---|---|
+| Regular | 0 | qualquer | Entra nos cálculos |
+| Bolsa parcial | 1 | 1-99% | Entra com desconto |
+| Bolsa integral | 1 | 100% | **Excluído dos cálculos** |
 
-```javascript
-{
-  receita: {
-    esperado,   // soma de todos os pagamentos
-    recebido,   // soma dos pagamentos com status 'paid'
-    projetado,  // recebido + pendentes não vencidos
-    pendente    // pendentes não vencidos
-  },
-  inadimplencia: {
-    atrasado,     // pendentes vencidos
-    defaultRate   // (atrasado / esperado) * 100
-  },
-  caixa: {
-    entries,  // soma das entradas manuais
-    exits,    // soma das saídas manuais
-    balance   // entries - exits
-  },
-  total  // recebido + balance
-}
-```
-
-## DRE Operacional
-
-| Componente | Fonte |
-|---|---|
-| Receita esperada | Soma de todos os `final_amount` |
-| Receita recebida | Pagamentos com `status = 'paid'` |
-| Inadimplência | Pagamentos `pending` com `due_date` vencido |
-| Caixa | Movimentações manuais |
-| Total consolidado | Recebido + Saldo de Caixa |
-
-## Geração automática de mensalidades
-
-- Endpoint: `POST /api/v1/payments/generate`
-- Parâmetros: `competence_month`, `competence_year`
-- Comportamento: gera para todas as matrículas ativas, ignora duplicatas
-- Retorno: `{ generated, skipped }`
+- Impacto mensal calculado e exibido nos cards de bolsistas
+- Stat "Impacto bolsas" no header da tela de matrículas
 
 ---
 
 # 🖥️ 7. MÓDULOS DO SISTEMA
 
 ## Dashboard
-- KPIs de decisão: Recebido, Esperado, Eficiência, Inadimplência
-- Saúde do negócio: Caixa, Total Consolidado, Status Geral
+- KPIs: Recebido, Esperado, Eficiência, Inadimplência
+- Saúde: Caixa, Total Consolidado, **Frequência Média**, Status Geral
 - Gráfico: Recebido vs Esperado — últimos 6 meses
-- Ranking de turmas por eficiência de cobrança
-- Filtro de período (mês/ano)
-- Estado de onboarding para sistema vazio
+- Ranking de turmas por eficiência
 
-## Relatórios
-- KPIs financeiros detalhados
-- Gauge de eficiência de cobrança (Recebido / Pendente / Inadimplente)
-- Ranking de turmas com badge de performance
-- Tabela de pagamentos ordenada por risco (vencido → pendente → pago)
-- Filtros: mês, ano, turma
-- Linhas vencidas destacadas em vermelho
+## Matrículas — EVOLUÍDO
+- **Aba Matrículas:** layout por turma em cards, sem tabela
+- **Aba Bolsistas:** cards com impacto financeiro detalhado
+- Dois formulários separados: Nova Matrícula / Nova Bolsa
+- Stats: Total, Ativas, Inativas, Bolsistas, Impacto bolsas
 
-## Alunos
-- Lista com status derivado de matrículas ativas
-- Busca por nome e email
-- Paginação (15 por página)
-- Navegação direta para matrículas do aluno
+## Presença — NOVO
+- Seleção de turma + data
+- Registro de chamada em lote (presente/ausente)
+- Botão "Todos presentes"
+- Histórico de frequência por turma com % e badges
 
-## Matrículas
-- Vínculo aluno-turma com papel (condutor/conduzida)
-- Gestão financeira por matrícula (mensalidade + desconto)
-- Paginação (15 por página)
-- Edição e cancelamento funcionais
+## Relatórios — EVOLUÍDO
+- Exportação **CSV** (resumo + ranking + pagamentos)
+- Exportação **PDF** via `window.print()`
 
-## Pagamentos
-- Geração em lote por competência
-- Filtro por mês/ano
-- Paginação (15 por página)
-- Marcação de pagamento com Toast de confirmação
-
-## Caixa
-- Movimentações manuais de entrada e saída
-- Filtro por tipo e descrição
-- Cancelamento de movimentações
-- Saldo em tempo real
-
-## Turmas
-- Suporte a múltiplos professores
-- Vinculação com unidade
-- Contagem de condutores e conduzidas
-
-## Administração
-- CRUD de usuários do sistema
-- Criação de perfis `admin` e `operator`
-- Desativação de usuários (soft delete)
-- Troca de senha com validação da senha atual
-- Proteção: admin não pode desativar a própria conta
+## Pagamentos — EVOLUÍDO
+- Layout profissional com `payments.css` dedicado
+- KPIs com borda colorida (sem fundo sólido)
+- Paginação 15/pág
 
 ---
 
-# ⚠️ 8. INCIDENTES CRÍTICOS RESOLVIDOS
+# 📱 8. RESPONSIVIDADE MOBILE/TABLET — NOVO
 
-## 8.1 Race condition no router
-| Campo | Detalhe |
+## Breakpoints
+
+| Breakpoint | Comportamento |
 |---|---|
-| Sintoma | Tela travando em "Carregando..." |
-| Causa | `init()` executando antes do módulo carregar |
-| Correção | `waitForModule()` com polling de 10ms |
-| Impacto | Estabilidade do SPA restaurada |
+| > 1024px | Layout desktop completo |
+| 768px–1024px | Tablet: sidebar 200px, grids 2 colunas |
+| < 768px | Mobile: sidebar overlay + hamburguer |
 
-## 8.2 RBAC bloqueando enrollments
-| Campo | Detalhe |
-|---|---|
-| Sintoma | 403 na API de matrículas |
-| Causa | `requireRole` com restrição excessiva |
-| Correção | Ajuste de permissões por endpoint |
-| Impacto | Fluxo de dados restabelecido |
+## Funcionalidades mobile
 
-## 8.3 Hash de rota incorreto
-| Campo | Detalhe |
-|---|---|
-| Sintoma | Módulo não carregava ao navegar |
-| Causa | Rota `#/enrollments` incompatível com router |
-| Correção | Uso de `window.location.hash` sem barra |
-| Impacto | Navegação entre módulos estabilizada |
-
-## 8.4 Tipagem de ID (CRÍTICO)
-| Campo | Detalhe |
-|---|---|
-| Sintoma | Dados não apareciam na tela de matrículas |
-| Causa | `Number(uuid)` retornando `NaN` |
-| Correção | IDs mantidos como string em todas as camadas |
-| Impacto | Correção total do fluxo Students → Enrollments |
-
-**Regra arquitetural derivada (OBRIGATÓRIA):**
-```
-IDs são strings UUID em todas as camadas.
-Proibido: Number(id), parseInt(id), qualquer coerção implícita.
-```
-
-## 8.5 Bug de competência (ano 2620)
-| Campo | Detalhe |
-|---|---|
-| Sintoma | Pagamentos gerados com ano 2620 |
-| Causa | Campo vazio enviado como string — `"" \|\| fallback` falhou |
-| Correção | Validação explícita de string vazia antes do fallback |
-| Impacto | Integridade dos dados financeiros restaurada |
-
-## 8.6 Loop de autenticação
-| Campo | Detalhe |
-|---|---|
-| Sintoma | Loop infinito de redirecionamentos |
-| Causa | Múltiplos pontos de redirect em api.js, router.js e auth.js |
-| Correção | Centralização total de redirect em auth.js |
-| Impacto | Fluxo de autenticação estabilizado |
+- Menu hamburguer (☰) no header
+- Sidebar como overlay com backdrop escuro
+- Fecha automaticamente ao navegar
+- Grids de KPIs 2×2
+- Formulários em coluna única
+- Modais fullscreen (95vw)
+- Tabelas com scroll horizontal
+- Cards de matrícula adaptados
 
 ---
 
-# 🚀 9. ROADMAP EVOLUTIVO
+# ⚠️ 9. INCIDENTES CRÍTICOS RESOLVIDOS (SESSÃO 3.0)
 
-## Curto prazo
-- [ ] Refresh token (extensão de sessão sem novo login)
-- [ ] Logs estruturados no backend
-- [ ] Filtro por unidade nos relatórios
+## 9.1 Cash sem autenticação
+- **Causa:** `cashRoutes` não recebia `user` e não chamava `requireRole`
+- **Correção:** `user` passado via `index.ts`, `requireRole` adicionado em cada endpoint
 
-## Médio prazo
-- [ ] Observabilidade (erros e uso via Cloudflare Analytics)
-- [ ] Perfis `teacher` e `financeiro` no RBAC
-- [ ] Exportação de relatórios em PDF/CSV
-- [ ] Notificações de inadimplência
+## 9.2 `requireAuth` retornava `{ error: Response }` em vez de `Response`
+- **Causa:** Wrapping desnecessário quebrando `instanceof Response` no `index.ts`
+- **Correção:** `requireAuth` retorna `Response` diretamente em caso de erro
 
-## Longo prazo
-- [ ] Multi-tenant real (múltiplas escolas)
-- [ ] Billing SaaS (planos e cobrança recorrente)
-- [ ] App mobile (PWA ou nativo)
-- [ ] Integração com gateway de pagamento
+## 9.3 Coluna `date` ausente em `cash_entries`
+- **Causa:** `cash.service.ts` refatorado para usar coluna `date` que não existia
+- **Correção:** Migration 0022 adicionou a coluna e migrou dados de `created_at`
+
+## 9.4 `throw err` antes de `skipped++` em `payments.service.ts`
+- **Causa:** Código morto após `throw` — erro interrompia geração inteira
+- **Correção:** `try/catch` por registro, erro loga e pula sem interromper
+
+## 9.5 Register aberto permitia qualquer pessoa criar conta
+- **Causa:** Endpoint público sem restrição
+- **Correção:** Register bloqueado após primeiro admin criado
+
+## 9.6 Modal turmas não abria (`.hidden` vs `.active`)
+- **Causa:** CSS usava `.active` para mostrar, JS removia `.hidden`
+- **Correção:** JS usa `classList.add("active")` e CSS tem `display:flex` em `.active`
+
+## 9.7 `initDone` sem recarregar dados ao voltar para a página
+- **Causa:** `if(initDone) return` sem chamar `loadData()` ou re-registrar botões
+- **Correção:** Ao voltar, chama `loadData()` + `setupBtn()` antes de retornar
 
 ---
 
@@ -490,50 +361,73 @@ Proibido: Number(id), parseInt(id), qualquer coerção implícita.
 
 | Área | Status | Detalhe |
 |---|---|---|
-| Backend | 🟢 Estável | Todos os módulos em produção |
-| Autenticação | 🟢 Hardened | JWT HMAC SHA-256, RBAC ativo |
+| Backend | 🟢 Estável | Todos os módulos em produção, varredura completa |
+| Autenticação | 🟢 Hardened | JWT 8h, register bloqueado, name no /me |
 | Frontend | 🟢 Estabilizado | SPA sem race conditions |
-| Financeiro | 🟢 Avançado | DRE + geração automática |
+| Financeiro | 🟢 Avançado | DRE + bolsistas + exportação |
+| Presença | 🟢 Ativo | Chamada + histórico + dashboard |
+| Mobile | 🟢 Responsivo | Hamburguer + overlay + grids adaptados |
 | Deploy | 🟢 Estável | Cloudflare Pages + Workers |
-| Arquitetura | 🟢 Sólida | Separação clara de camadas |
-| UX | 🟢 Profissional | Toast, paginação, loading states |
-| Documentação | 🟢 Atualizada | Este documento |
+| Segurança | 🟢 Reforçada | Varredura completa de todas as rotas |
 
 ---
 
-# 📋 11. PROCESSO DE DESENVOLVIMENTO
+# 📋 11. USUÁRIOS DO SISTEMA (PRODUÇÃO)
 
-## Fluxo padrão para qualquer mudança
+| Email | Role | Observação |
+|---|---|---|
+| alvessilvaedson125@gmail.com | admin | Usuário principal |
+| tavarescampos.livia@gmail.com | admin | |
+| bailadocarioca@gmail.com | operator | Senha: bailado_operador |
+| edson@bailado.com | admin | |
 
-```
-1. Diagnóstico — entender o problema antes de codar
-2. Proposta — definir a solução e os arquivos afetados
-3. Aprovação — validar com o responsável
-4. Execução controlada — um arquivo por vez
-5. Commit — mensagem descritiva por feature
-6. Deploy — verificar em produção
-```
+---
+
+# 🚀 12. ROADMAP EVOLUTIVO
+
+## Pendente curto prazo
+- [ ] Tela login mobile — card pequeno (login.css responsivo)
+- [ ] Tabela Turmas/Professores no mobile — colunas cortadas
+- [ ] Relatórios — header duplicado no mobile
+- [ ] Refresh token
+- [ ] Logs estruturados no backend
+
+## Médio prazo
+- [ ] Filtro por unidade nos relatórios
+- [ ] Exportação de relatório de frequência
+- [ ] Notificações de inadimplência
+- [ ] Perfis `teacher` e `financeiro` no RBAC
+
+## Longo prazo
+- [ ] Multi-tenant real
+- [ ] Billing SaaS
+- [ ] PWA / App mobile nativo
+- [ ] Integração com gateway de pagamento
+
+---
+
+# 📋 13. PROCESSO DE DESENVOLVIMENTO
 
 ## Padrão de commit
-
 ```
 feat: nova funcionalidade
 fix: correção de bug
 refactor: melhoria sem mudança de comportamento
+migration: alteração no banco de dados
 docs: atualização de documentação
 ```
 
 ## Regras invioláveis
 
 - Nunca commitar código não testado
-- Nunca modificar múltiplos módulos em um único commit sem necessidade
 - Nunca usar `alert()` — usar `Toast`
 - Nunca usar `onclick` inline no HTML — eventos via JS
 - Nunca converter IDs com `Number()` ou `parseInt()`
-- Nunca fazer redirect fora do `auth.js`
-- Nunca armazenar `JWT_SECRET` no código — usar Cloudflare Secrets
+- Nunca fazer redirect fora do `auth.js`/`router.js`
+- Nunca armazenar `JWT_SECRET` no código
+- `document.addEventListener("click")` global **proibido** — causa interferência entre módulos
 
 ---
 
 *Documento mantido pelo time de desenvolvimento.*
-*Última atualização: Março 2026*
+*Última atualização: 30 de Março de 2026 — Sessão 3.0*
