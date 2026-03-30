@@ -1,133 +1,144 @@
-import { requireRole } from "../../security/authorize"
+import { requireRole } from "../../security/authorize";
 
 export async function handleTeachersRoutes(
-request: Request,
-env: any,
-url: URL,
-user: any
-){
+  request: Request,
+  env: any,
+  url: URL,
+  user: any
+) {
 
-// LISTAR PROFESSORES
-if(url.pathname === "/api/v1/teachers" && request.method === "GET"){
+  // =========================
+  // LISTAR
+  // =========================
+  if (url.pathname === "/api/v1/teachers" && request.method === "GET") {
+    const roleError = requireRole(user, ["admin", "operator"]);
+    if (roleError) return roleError;
 
-const roleError = requireRole(user, ["admin","operator"])
-if(roleError) return roleError
+    const { results } = await env.DB.prepare(`
+      SELECT * FROM teachers
+      WHERE deleted_at IS NULL
+      ORDER BY created_at DESC
+    `).all();
 
-const { results } = await env.DB.prepare(`
-SELECT *
-FROM teachers
-WHERE deleted_at IS NULL
-ORDER BY created_at DESC
-`).all()
+    return Response.json({ success: true, data: results });
+  }
 
-return Response.json({
-success: true,
-data: results
-})
+  // =========================
+  // CRIAR
+  // =========================
+  if (url.pathname === "/api/v1/teachers" && request.method === "POST") {
+    const roleError = requireRole(user, ["admin"]);
+    if (roleError) return roleError;
 
-}
+    const body: any = await request.json();
 
+    // 🔥 Valida name
+    if (!body.name) {
+      return Response.json(
+        { success: false, message: "Name is required" },
+        { status: 400 }
+      );
+    }
 
-// CRIAR PROFESSOR
-if(url.pathname === "/api/v1/teachers" && request.method === "POST"){
+    const id = crypto.randomUUID();
 
-const roleError = requireRole(user, ["admin"])
-if(roleError) return roleError
+    await env.DB.prepare(`
+      INSERT INTO teachers (id, name, email, phone, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `)
+    .bind(
+      id,
+      body.name,
+      body.email  ?? null,
+      body.phone  ?? null,
+      body.status ?? "active"
+    )
+    .run();
 
-const body: any = await request.json()
+    return Response.json({ success: true, id });
+  }
 
-const id = crypto.randomUUID()
+  // =========================
+  // EDITAR
+  // =========================
+  if (
+    url.pathname.startsWith("/api/v1/teachers/") &&
+    request.method === "PUT"
+  ) {
+    const roleError = requireRole(user, ["admin"]);
+    if (roleError) return roleError;
 
-await env.DB.prepare(`
-INSERT INTO teachers (
-id,
-name,
-email,
-phone,
-status
-)
-VALUES (?, ?, ?, ?, ?)
-`)
-.bind(
-id,
-body.name,
-body.email ?? null,
-body.phone ?? null,
-body.status ?? "active"
-)
-.run()
+    const id   = url.pathname.split("/").pop();
+    const body: any = await request.json();
 
-return Response.json({
-success: true,
-id
-})
+    // 🔥 Verifica existência
+    const existing = await env.DB.prepare(`
+      SELECT id FROM teachers WHERE id = ? AND deleted_at IS NULL
+    `).bind(id).first();
 
-}
+    if (!existing) {
+      return Response.json(
+        { success: false, message: "Teacher not found" },
+        { status: 404 }
+      );
+    }
 
+    if (!body.name) {
+      return Response.json(
+        { success: false, message: "Name is required" },
+        { status: 400 }
+      );
+    }
 
-// EDITAR PROFESSOR
-if(
-url.pathname.startsWith("/api/v1/teachers/")
-&& request.method === "PUT"
-){
+    await env.DB.prepare(`
+      UPDATE teachers
+      SET name = ?, email = ?, phone = ?, status = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `)
+    .bind(
+      body.name,
+      body.email  ?? null,
+      body.phone  ?? null,
+      body.status ?? "active",
+      id
+    )
+    .run();
 
-const roleError = requireRole(user, ["admin"])
-if(roleError) return roleError
+    return Response.json({ success: true });
+  }
 
-const id = url.pathname.split("/").pop()
+  // =========================
+  // DELETAR
+  // =========================
+  if (
+    url.pathname.startsWith("/api/v1/teachers/") &&
+    request.method === "DELETE"
+  ) {
+    const roleError = requireRole(user, ["admin"]);
+    if (roleError) return roleError;
 
-const body: any = await request.json()
+    const id = url.pathname.split("/").pop();
 
-await env.DB.prepare(`
-UPDATE teachers
-SET
-name = ?,
-email = ?,
-phone = ?,
-status = ?
-WHERE id = ?
-`)
-.bind(
-body.name,
-body.email ?? null,
-body.phone ?? null,
-body.status ?? "active",
-id
-)
-.run()
+    // 🔥 Verifica existência
+    const existing = await env.DB.prepare(`
+      SELECT id FROM teachers WHERE id = ? AND deleted_at IS NULL
+    `).bind(id).first();
 
-return Response.json({
-success: true
-})
+    if (!existing) {
+      return Response.json(
+        { success: false, message: "Teacher not found" },
+        { status: 404 }
+      );
+    }
 
-}
+    await env.DB.prepare(`
+      UPDATE teachers
+      SET deleted_at = datetime('now'), updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(id).run();
 
-// DELETAR PROFESSOR
-if(
-url.pathname.startsWith("/api/v1/teachers/")
-&& request.method === "DELETE"
-){
+    return Response.json({ success: true });
+  }
 
-const roleError = requireRole(user, ["admin"])
-if(roleError) return roleError
-
-const id = url.pathname.split("/").pop()
-
-await env.DB.prepare(`
-UPDATE teachers
-SET deleted_at = CURRENT_TIMESTAMP
-WHERE id = ?
-`)
-.bind(id)
-.run()
-
-return Response.json({
-success: true
-})
-
-}
-
-
-return null
-
+  return null;
 }
