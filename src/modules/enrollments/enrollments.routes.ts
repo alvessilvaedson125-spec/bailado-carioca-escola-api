@@ -13,22 +13,26 @@ export async function handleEnrollmentsRoutes(
     url.pathname === "/api/v1/enrollments" &&
     request.method === "GET"
   ) {
-    const roleError = requireRole(user, ["admin", "operator", "user"]);
+    const roleError = requireRole(user, ["admin", "operator"]);
     if (roleError) return roleError;
 
     const { results } = await env.DB.prepare(`
-      SELECT e.*, s.name as student_name, c.name as class_name
+      SELECT
+        e.*,
+        s.name as student_name,
+        c.name as class_name,
+        c.day_of_week,
+        c.start_time,
+        u.name as unit_name
       FROM enrollments e
       JOIN students s ON s.id = e.student_id
       JOIN classes c ON c.id = e.class_id
+      LEFT JOIN units u ON u.id = c.unit_id
       WHERE e.deleted_at IS NULL
       ORDER BY e.created_at DESC
     `).all();
 
-    return Response.json({
-      success: true,
-      data: results,
-    });
+    return Response.json({ success: true, data: results });
   }
 
   // =========================
@@ -38,7 +42,7 @@ export async function handleEnrollmentsRoutes(
     url.pathname === "/api/v1/enrollments" &&
     request.method === "POST"
   ) {
-    const roleError = requireRole(user, ["admin"]);
+    const roleError = requireRole(user, ["admin", "operator"]);
     if (roleError) return roleError;
 
     const body = (await request.json()) as any;
@@ -51,7 +55,7 @@ export async function handleEnrollmentsRoutes(
       monthly_fee,
       discount,
       status,
-      scholarship  // 🔥 NOVO
+      scholarship
     } = body;
 
     if (!student_id || !class_id) {
@@ -61,15 +65,12 @@ export async function handleEnrollmentsRoutes(
       );
     }
 
-    // 🚨 BLOQUEIO DE DUPLICIDADE
     const existingEnrollment = await env.DB.prepare(`
       SELECT id FROM enrollments
       WHERE student_id = ?
       AND class_id = ?
       AND deleted_at IS NULL
-    `)
-      .bind(student_id, class_id)
-      .first();
+    `).bind(student_id, class_id).first();
 
     if (existingEnrollment) {
       return Response.json(
@@ -81,20 +82,11 @@ export async function handleEnrollmentsRoutes(
     const id = crypto.randomUUID();
 
     try {
-
       await env.DB.prepare(`
         INSERT INTO enrollments (
-          id,
-          student_id,
-          class_id,
-          role,
-          type,
-          monthly_fee,
-          discount,
-          status,
-          scholarship,
-          created_at,
-          updated_at
+          id, student_id, class_id, role, type,
+          monthly_fee, discount, status, scholarship,
+          created_at, updated_at
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
       `)
@@ -102,31 +94,26 @@ export async function handleEnrollmentsRoutes(
         id,
         student_id,
         class_id,
-        role       || "conductor",
-        type       || "individual",
+        role        || "conductor",
+        type        || "individual",
         monthly_fee || 0,
-        discount   || 0,
-        status     || "active",
-        scholarship ? 1 : 0  // 🔥 NOVO
+        discount    || 0,
+        status      || "active",
+        scholarship  ? 1 : 0
       )
       .run();
 
     } catch (err: any) {
-
       if (err.message?.includes("UNIQUE")) {
         return Response.json(
           { success: false, message: "Matrícula duplicada bloqueada" },
           { status: 400 }
         );
       }
-
       throw err;
     }
 
-    return Response.json({
-      success: true,
-      id,
-    });
+    return Response.json({ success: true, id });
   }
 
   // =========================
@@ -136,11 +123,10 @@ export async function handleEnrollmentsRoutes(
     url.pathname.startsWith("/api/v1/enrollments/") &&
     request.method === "PUT"
   ) {
-    const roleError = requireRole(user, ["admin"]);
+    const roleError = requireRole(user, ["admin", "operator"]);
     if (roleError) return roleError;
 
     const id = url.pathname.split("/").pop();
-
     const body = (await request.json()) as any;
 
     const {
@@ -151,15 +137,13 @@ export async function handleEnrollmentsRoutes(
       monthly_fee,
       discount,
       status,
-      scholarship  // 🔥 NOVO
+      scholarship
     } = body;
 
     const existing = await env.DB.prepare(`
       SELECT id FROM enrollments
       WHERE id = ? AND deleted_at IS NULL
-    `)
-      .bind(id)
-      .first();
+    `).bind(id).first();
 
     if (!existing) {
       return Response.json(
@@ -190,14 +174,12 @@ export async function handleEnrollmentsRoutes(
       monthly_fee ?? null,
       discount    ?? null,
       status      ?? null,
-      scholarship !== undefined ? (scholarship ? 1 : 0) : null,  // 🔥 NOVO
+      scholarship !== undefined ? (scholarship ? 1 : 0) : null,
       id
     )
     .run();
 
-    return Response.json({
-      success: true,
-    });
+    return Response.json({ success: true });
   }
 
   // =========================
@@ -207,7 +189,7 @@ export async function handleEnrollmentsRoutes(
     url.pathname.startsWith("/api/v1/enrollments/") &&
     request.method === "DELETE"
   ) {
-    const roleError = requireRole(user, ["admin"]);
+    const roleError = requireRole(user, ["admin", "operator"]);
     if (roleError) return roleError;
 
     const id = url.pathname.split("/").pop();
@@ -215,9 +197,7 @@ export async function handleEnrollmentsRoutes(
     const existing = await env.DB.prepare(`
       SELECT id FROM enrollments
       WHERE id = ? AND deleted_at IS NULL
-    `)
-      .bind(id)
-      .first();
+    `).bind(id).first();
 
     if (!existing) {
       return Response.json(
@@ -231,13 +211,9 @@ export async function handleEnrollmentsRoutes(
       SET deleted_at = datetime('now'),
           updated_at = datetime('now')
       WHERE id = ?
-    `)
-      .bind(id)
-      .run();
+    `).bind(id).run();
 
-    return Response.json({
-      success: true,
-    });
+    return Response.json({ success: true });
   }
 
   return null;

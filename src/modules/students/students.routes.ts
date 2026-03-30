@@ -6,7 +6,9 @@ export async function handleStudentsRoutes(
   url: URL,
   user: any
 ) {
+  // =========================
   // LISTAR TODOS
+  // =========================
   if (url.pathname === "/api/v1/students" && request.method === "GET") {
     const roleError = requireRole(user, ["admin", "operator"]);
     if (roleError) return roleError;
@@ -18,13 +20,12 @@ export async function handleStudentsRoutes(
       ORDER BY created_at DESC
     `).all();
 
-    return Response.json({
-      success: true,
-      data: results,
-    });
+    return Response.json({ success: true, data: results });
   }
 
+  // =========================
   // BUSCAR POR ID
+  // =========================
   if (
     url.pathname.startsWith("/api/v1/students/") &&
     request.method === "GET"
@@ -34,29 +35,24 @@ export async function handleStudentsRoutes(
 
     const id = url.pathname.split("/").pop();
 
-    const { results } = await env.DB.prepare(`
-      SELECT *
-      FROM students
-      WHERE id = ?
-      AND deleted_at IS NULL
-    `)
-      .bind(id)
-      .all();
+    const result = await env.DB.prepare(`
+      SELECT * FROM students
+      WHERE id = ? AND deleted_at IS NULL
+    `).bind(id).first();
 
-    if (!results.length) {
+    if (!result) {
       return Response.json(
-        { success: false, error: "Student not found" },
+        { success: false, message: "Student not found" },
         { status: 404 }
       );
     }
 
-    return Response.json({
-      success: true,
-      data: results[0],
-    });
+    return Response.json({ success: true, data: result });
   }
 
+  // =========================
   // CRIAR
+  // =========================
   if (url.pathname === "/api/v1/students" && request.method === "POST") {
     const roleError = requireRole(user, ["admin", "operator"]);
     if (roleError) return roleError;
@@ -74,103 +70,70 @@ export async function handleStudentsRoutes(
     const id = crypto.randomUUID();
 
     await env.DB.prepare(`
-      INSERT INTO students (
-        id,
-        name,
-        phone,
-        email,
-        created_at,
-        updated_at
-      )
+      INSERT INTO students (id, name, phone, email, created_at, updated_at)
       VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-    `)
-      .bind(id, name, phone ?? null, email ?? null)
-      .run();
+    `).bind(id, name, phone ?? null, email ?? null).run();
 
-    return Response.json({
-      success: true,
-      id,
-    });
-  }
-// ATUALIZAR
-if (
-  url.pathname.startsWith("/api/v1/students/") &&
-  request.method === "PUT"
-) {
-  const roleError = requireRole(user, ["admin", "operator"]);
-  if (roleError) return roleError;
-
-  const id = url.pathname.split("/").pop();
-  const body = (await request.json()) as any;
-
-  const existing = await env.DB.prepare(`
-    SELECT *
-    FROM students
-    WHERE id = ?
-    AND deleted_at IS NULL
-  `)
-    .bind(id)
-    .first();
-
-  if (!existing) {
-    return Response.json(
-      { success: false, error: "Student not found" },
-      { status: 404 }
-    );
+    return Response.json({ success: true, id });
   }
 
-  const oldStudent = existing;
+  // =========================
+  // ATUALIZAR
+  // =========================
+  if (
+    url.pathname.startsWith("/api/v1/students/") &&
+    request.method === "PUT"
+  ) {
+    const roleError = requireRole(user, ["admin", "operator"]);
+    if (roleError) return roleError;
 
-  // REGISTRA HISTÓRICO SE TELEFONE MUDAR
-  if (oldStudent.phone !== body.phone) {
+    const id   = url.pathname.split("/").pop();
+    const body = (await request.json()) as any;
 
-    await env.DB.prepare(`
-      INSERT INTO student_history (
-        id,
-        student_id,
-        field,
-        old_value,
-        new_value,
-        changed_by,
-        changed_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `)
+    const existing = await env.DB.prepare(`
+      SELECT * FROM students
+      WHERE id = ? AND deleted_at IS NULL
+    `).bind(id).first();
+
+    if (!existing) {
+      return Response.json(
+        { success: false, message: "Student not found" },
+        { status: 404 }
+      );
+    }
+
+    // Registra histórico se telefone mudar
+    if (existing.phone !== body.phone) {
+      await env.DB.prepare(`
+        INSERT INTO student_history (
+          id, student_id, field, old_value, new_value, changed_by, changed_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `)
       .bind(
         crypto.randomUUID(),
         id,
         "phone",
-        oldStudent.phone,
+        existing.phone,
         body.phone,
         user.userId,
         Date.now()
       )
       .run();
+    }
+
+    await env.DB.prepare(`
+      UPDATE students
+      SET name = ?, phone = ?, email = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).bind(body.name, body.phone ?? null, body.email ?? null, id).run();
+
+    return Response.json({ success: true });
   }
 
-  await env.DB.prepare(`
-    UPDATE students
-    SET
-      name = ?,
-      phone = ?,
-      email = ?,
-      updated_at = datetime('now')
-    WHERE id = ?
-  `)
-    .bind(
-      body.name,
-      body.phone ?? null,
-      body.email ?? null,
-      id
-    )
-    .run();
-
-  return Response.json({
-    success: true,
-  });
-}
-
+  // =========================
   // SOFT DELETE
+  // =========================
   if (
     url.pathname.startsWith("/api/v1/students/") &&
     request.method === "DELETE"
@@ -180,41 +143,25 @@ if (
 
     const id = url.pathname.split("/").pop();
 
-   
-   
     const existing = await env.DB.prepare(`
-      SELECT id
-      FROM students
-      WHERE id = ?
-      AND deleted_at IS NULL
-    `)
-      .bind(id)
-      .first();
-
-      const oldStudent = existing;
+      SELECT id FROM students
+      WHERE id = ? AND deleted_at IS NULL
+    `).bind(id).first();
 
     if (!existing) {
       return Response.json(
-        { success: false, error: "Student not found" },
+        { success: false, message: "Student not found" },
         { status: 404 }
       );
     }
 
-    
-
     await env.DB.prepare(`
       UPDATE students
-      SET
-        deleted_at = datetime('now'),
-        updated_at = datetime('now')
+      SET deleted_at = datetime('now'), updated_at = datetime('now')
       WHERE id = ?
-    `)
-      .bind(id)
-      .run();
+    `).bind(id).run();
 
-    return Response.json({
-      success: true,
-    });
+    return Response.json({ success: true });
   }
 
   return null;
