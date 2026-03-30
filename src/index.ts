@@ -9,6 +9,7 @@ import { handleTeachersRoutes } from "./modules/teachers/teachers.routes";
 import { cashRoutes } from "./modules/payments/cash.routes";
 import { handleAdminRoutes } from "./modules/admin/admin.routes";
 import { handleAttendanceRoutes } from "./modules/attendance/attendance.routes";
+import { handlePrivateRoutes } from "./modules/private/private.routes";
 
 function withCors(response: Response) {
   const headers = new Headers(response.headers);
@@ -106,6 +107,12 @@ export default {
         const cashResponse = await cashRoutes(request, env, user);
         if (cashResponse) return withCors(cashResponse);
       }
+
+      // =========================
+      // PRIVATE LESSONS
+      // =========================
+       const privateResponse = await handlePrivateRoutes(request, env, url, user);
+       if (privateResponse) return withCors(privateResponse);
 
       // =========================
       // ADMIN

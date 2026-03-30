@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS private_packages (
+  id TEXT PRIMARY KEY,
+  student_id TEXT NOT NULL,
+  teacher_1_id TEXT NOT NULL,
+  teacher_2_id TEXT,
+  total_sessions INTEGER NOT NULL DEFAULT 4,
+  sessions_used INTEGER NOT NULL DEFAULT 0,
+  price_total REAL NOT NULL DEFAULT 0,
+  price_per_session REAL NOT NULL DEFAULT 0,
+  location_type TEXT NOT NULL DEFAULT 'bailado_laranjeiras',
+  location_notes TEXT,
+  start_date TEXT,
+  status TEXT NOT NULL DEFAULT 'active',
+  notes TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  deleted_at TEXT,
+  FOREIGN KEY (student_id) REFERENCES students(id),
+  FOREIGN KEY (teacher_1_id) REFERENCES teachers(id),
+  FOREIGN KEY (teacher_2_id) REFERENCES teachers(id)
+);
