@@ -5,87 +5,77 @@ export async function generateMonthlyPayments(
 ) {
 
   const enrollments = await env.DB.prepare(`
-  SELECT
-    e.id as enrollment_id,
-    e.student_id,
-    e.monthly_fee,
-e.discount,
-e.status
-  FROM enrollments e
-  JOIN students s ON s.id = e.student_id
-  WHERE e.deleted_at IS NULL
-  AND s.deleted_at IS NULL
-  AND e.status = 'active' -- 🔥 ADICIONAR ISSO
-`).all();
+    SELECT
+      e.id        as enrollment_id,
+      e.student_id,
+      e.monthly_fee,
+      e.discount,
+      e.scholarship,
+      e.status
+    FROM enrollments e
+    JOIN students s ON s.id = e.student_id
+    WHERE e.deleted_at IS NULL
+      AND s.deleted_at IS NULL
+      AND e.status = 'active'
+  `).all();
 
   let generated = 0;
-  let skipped = 0;
+  let skipped   = 0;
 
   for (const row of enrollments.results) {
 
-  // 🔒 SEGUNDA CAMADA DE SEGURANÇA
-  if (row.status && row.status !== "active") {
-    continue;
-  }
+    // Segurança extra
+    if (row.status !== "active") {
+      skipped++;
+      continue;
+    }
 
-    const enrollmentId = row.enrollment_id;
-    const studentId = row.student_id;
+    // 🔥 Pula bolsistas integrais — não gera pagamento R$ 0,00
+    const fee      = Number(row.monthly_fee  ?? 0);
+    const discount = Number(row.discount     ?? 0);
 
-    const price = row.monthly_fee ?? 0;
-    const discountPercent = row.discount ?? 0;
+    if (row.scholarship === 1 && discount === 100) {
+      skipped++;
+      continue;
+    }
 
-    const discountAmount = price * (discountPercent / 100);
-    const finalAmount = price - discountAmount;
+    const discountAmount = fee * (discount / 100);
+    const finalAmount    = fee - discountAmount;
 
-    const id = crypto.randomUUID();
+    // Verifica duplicidade
+    const existing = await env.DB.prepare(`
+      SELECT id FROM payments
+      WHERE enrollment_id = ?
+        AND competence_month = ?
+        AND competence_year = ?
+        AND deleted_at IS NULL
+    `).bind(row.enrollment_id, competenceMonth, competenceYear).first();
 
-    // =========================
-// VERIFICAR DUPLICIDADE
-// =========================
-const existing = await env.DB.prepare(`
-  SELECT id FROM payments
-  WHERE enrollment_id = ?
-  AND competence_month = ?
-  AND competence_year = ?
-  AND deleted_at IS NULL
-`)
-.bind(enrollmentId, competenceMonth, competenceYear)
-.first();
+    if (existing) {
+      skipped++;
+      continue;
+    }
 
-if (existing) {
-  skipped++;
-  continue;
-}
+    const id       = crypto.randomUUID();
+    const due_date = `${competenceYear}-${String(competenceMonth).padStart(2, "0")}-07`;
 
     try {
-
-    const due_date = `${competenceYear}-${String(competenceMonth).padStart(2, "0")}-07`;
       await env.DB.prepare(`
         INSERT INTO payments (
-          id,
-          enrollment_id,
-          student_id,
-          amount,
-          gross_amount,
-          discount_percent,
-          discount_amount,
-          final_amount,
-          competence_month,
-          competence_year,
-          due_date,
-          status,
-          created_at,
-          updated_at
+          id, enrollment_id, student_id,
+          amount, gross_amount, discount_percent, discount_amount, final_amount,
+          competence_month, competence_year, due_date,
+          status, created_at, updated_at
         )
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', datetime('now'), datetime('now'))
       `)
       .bind(
         id,
-        enrollmentId,
-        studentId,
+        row.enrollment_id,
+        row.student_id,
         finalAmount,
-        price,
-        discountPercent,
+        fee,
+        discount,
         discountAmount,
         finalAmount,
         competenceMonth,
@@ -97,18 +87,11 @@ if (existing) {
       generated++;
 
     } catch (err) {
-
-     console.error("PAYMENT INSERT ERROR:", JSON.stringify(err, null, 2));
-throw err;
+      // 🔥 Loga e pula — não interrompe a geração inteira
+      console.error("PAYMENT INSERT ERROR:", err);
       skipped++;
-
     }
-
   }
 
-  return {
-    generated,
-    skipped
-  };
-
+  return { generated, skipped };
 }
