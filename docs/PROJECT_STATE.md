@@ -1,7 +1,7 @@
 # Bailado Carioca — Gestão Escolar
 ## Documento de Estado do Projeto (PROJECT_STATE)
 
-> **Versão:** 3.0 — Março 2026
+> **Versão:** 4.0 — Março 2026
 > **Status:** Produção ativa
 > **Classificação:** SaaS de gestão especializada
 
@@ -33,6 +33,9 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 | Responsividade mobile/tablet | ✅ Implementado |
 | Nome do usuário logado no header | ✅ Implementado |
 | Register bloqueado após primeiro admin | ✅ Implementado |
+| Caixa — saldo acumulado + entradas/saídas do mês | ✅ Implementado |
+| Aulas Particulares — pacotes, sessões, pagamentos | ✅ Implementado |
+| Sessões — toggle por aluno / por data | ✅ Implementado |
 
 ---
 
@@ -121,42 +124,45 @@ bailado-carioca-erp-front/
 │   │   ├── enrollments.css
 │   │   ├── finance.css
 │   │   ├── login.css
-│   │   ├── payments.css       ← NOVO
+│   │   ├── payments.css
+│   │   ├── private.css        ← NOVO
 │   │   ├── reports.css
 │   │   ├── students.css
 │   │   ├── teachers.css
 │   │   └── units.css
 │   ├── base.css
 │   ├── components.css
-│   ├── layout.css             ← responsividade mobile/tablet
+│   ├── layout.css
 │   ├── style.css
 │   └── variables.css
 ├── js/
 │   ├── api.js
-│   ├── auth.js                ← role salvo no localStorage
-│   ├── attendance.js          ← NOVO
-│   ├── cash.js
+│   ├── auth.js
+│   ├── attendance.js
+│   ├── cash.js                ← saldo acumulado, entradas/saídas do mês
 │   ├── classes.js
 │   ├── dashboard.js
-│   ├── enrollments.js         ← abas Matrículas/Bolsistas
-│   ├── finance.js             ← bolsistas integrais excluídos
+│   ├── enrollments.js
+│   ├── finance.js
 │   ├── payments.js
+│   ├── private.js             ← NOVO
 │   ├── reports.js
-│   ├── router.js              ← checkAuth com name+role, menu RBAC
+│   ├── router.js              ← rota private adicionada
 │   ├── students.js
 │   ├── teachers.js
 │   ├── toast.js
 │   ├── units.js
 │   └── utils.js
 ├── admin.html
-├── app.html                   ← hamburguer mobile, sidebar overlay
-├── attendance.html            ← NOVO
+├── app.html
+├── attendance.html
 ├── cash.html
 ├── classes.html
 ├── dashboard.html
-├── enrollments.html           ← abas + modal bolsa separado
+├── enrollments.html
 ├── index.html
 ├── payments.html
+├── private.html               ← NOVO
 ├── reports.html
 ├── students.html
 ├── teachers.html
@@ -171,31 +177,35 @@ bailado-carioca-escola-api/
 │   │   ├── admin/
 │   │   │   └── admin.routes.ts
 │   │   ├── attendance/
-│   │   │   └── attendance.routes.ts   ← NOVO — chamada + /dashboard
+│   │   │   └── attendance.routes.ts
 │   │   ├── auth/
-│   │   │   └── auth.routes.ts         ← register bloqueado, name no /me
+│   │   │   └── auth.routes.ts
 │   │   ├── classes/
 │   │   │   └── classes.routes.ts
 │   │   ├── enrollments/
-│   │   │   └── enrollments.routes.ts  ← JOIN com units, operator pode criar
+│   │   │   └── enrollments.routes.ts
 │   │   ├── payments/
 │   │   │   ├── payments.routes.ts
-│   │   │   ├── payments.service.ts    ← bolsistas integrais pulados
-│   │   │   ├── cash.routes.ts         ← requireRole adicionado
-│   │   │   └── cash.service.ts        ← Response.json, date normalizada
+│   │   │   ├── payments.service.ts
+│   │   │   ├── cash.routes.ts
+│   │   │   └── cash.service.ts
+│   │   ├── private/
+│   │   │   └── private.routes.ts  ← NOVO
 │   │   ├── students/
 │   │   │   └── students.routes.ts
 │   │   ├── teachers/
-│   │   │   └── teachers.routes.ts     ← validação name, verificação existência
+│   │   │   └── teachers.routes.ts
 │   │   └── units/
-│   │       └── units.routes.ts        ← verificação existência no PUT/DELETE
+│   │       └── units.routes.ts
 │   ├── security/
-│   │   ├── authorize.ts               ← requireAuth retorna Response direto
+│   │   ├── authorize.ts
 │   │   └── jwt.ts
-│   └── index.ts                       ← ordem corrigida, cash autenticado
+│   └── index.ts               ← private routes registrado
 ├── migrations/
-│   ├── 0001 a 0021 ...
-│   └── 0022_add_date_to_cash_entries.sql  ← NOVO
+│   ├── 0001 a 0022 ...
+│   ├── 0023_create_private_packages.sql   ← NOVO
+│   ├── 0024_create_private_sessions.sql   ← NOVO
+│   └── 0025_create_private_payments.sql   ← NOVO
 ├── docs/
 │   └── PROJECT_STATE.md
 └── wrangler.jsonc
@@ -219,12 +229,6 @@ bailado-carioca-escola-api/
 | `admin` | Leitura e escrita em todos os módulos, gestão de usuários |
 | `operator` | Leitura geral + criar/editar alunos e matrículas + marcar pagamentos + presença |
 
-## 4.3 Controle de menu no frontend
-
-- `user_role` salvo no `localStorage` após login e atualizado em cada `checkAuth`
-- Menu "Administração" oculto para operadores via classe `.menu-admin-only`
-- `admin.js` bloqueia acesso direto para operadores com mensagem visual
-
 ---
 
 # 🧩 5. MODELO DE DOMÍNIO
@@ -232,128 +236,112 @@ bailado-carioca-escola-api/
 ## Pipeline central
 ```
 Students → Enrollments (regular + scholarship) → Payments → Cash → Dashboard/Reports
+                                                                          ↑
+Private: Students → private_packages → private_sessions → private_payments
 ```
 
-## Entidades principais
+## Aulas Particulares — NOVO
 
-### Enrollments (Matrículas)
-- **Dois fluxos separados:** matrículas regulares e bolsistas
-- Campo `scholarship` (0/1) diferencia os dois tipos
-- Bolsistas integrais (`scholarship=1 AND final_amount=0`) excluídos dos cálculos financeiros
-- 4 papéis com gênero: `conductor_m`, `conductor_f`, `follower_f`, `follower_m`
-- Layout por turma na visualização (cards agrupados)
+### Tabelas criadas
+- `private_packages` — pacote vendido ao aluno
+- `private_sessions` — cada aula individual
+- `private_payments` — pagamentos separados de mensalidades
 
-### Attendance (Presença) — NOVO
-- Tabela `attendance` criada na migration 0021
-- Registro de chamada por turma + data em lote
-- Histórico de frequência por aluno com % e badge
-- Endpoint `/api/v1/attendance/dashboard` para frequência média geral
+### Regras de negócio
+- Pacote padrão = 4 aulas (configurável)
+- `sessions_used` só incrementa quando sessão é marcada como **completed** — nunca ao agendar
+- Pacote muda para `completed` automaticamente quando `sessions_used >= total_sessions`
+- Se sessão cancelada/no_show: decrementa `sessions_used` **apenas se estava completed**
+- Pagamento gerado automaticamente ao criar pacote (status `pending`)
+- Aula avulsa: `package_id = null`
+- Dois locais fixos: `bailado_laranjeiras` | `student_home`
+- Dois professores por sessão: `teacher_1_id` (obrigatório) + `teacher_2_id` (nullable)
 
-### Cash (Caixa)
-- Coluna `date` adicionada na migration 0022
-- Data normalizada para `YYYY-MM-DD`
-- Verificação de existência antes de cancelar
+### Fluxo financeiro
+```
+Criar pacote → payment gerado (pending)
+     ↓
+Agendar sessões → sessions_used NÃO muda
+     ↓
+Marcar sessão como completed → sessions_used++
+     ↓
+Marcar payment como paid → valor entra no recebido
+```
+
+### Endpoints
+- `GET/POST /api/v1/private/packages`
+- `PUT/DELETE /api/v1/private/packages/:id`
+- `GET/POST /api/v1/private/sessions`
+- `PATCH /api/v1/private/sessions/:id` — atualiza status
+- `GET /api/v1/private/payments`
+- `PATCH /api/v1/private/payments/:id` — marca como pago
+- `GET /api/v1/private/payments/summary`
+
+### Frontend
+- Página `private.html` com 3 abas: Pacotes / Sessões / Pagamentos
+- **Aba Sessões** tem toggle: "Por aluno" | "Por data"
+  - **Por aluno:** cards agrupados por aluno com todas as sessões dentro
+  - **Por data:** grupos Hoje / Esta semana / Próximas / Passadas
+- KPIs: Pacotes ativos, Sessões agendadas, Recebido, Pendente
+- Barra de progresso no card do pacote reflete apenas aulas realizadas
 
 ---
 
 # 💰 6. ARQUITETURA FINANCEIRA
 
-## Bolsistas
+## Caixa — EVOLUÍDO
+- **Saldo atual** = acumulado histórico (todas as entradas - todas as saídas)
+- **Entradas do mês** = apenas entradas do mês corrente
+- **Saídas do mês** = apenas saídas do mês corrente
+- Cards zerados automaticamente ao virar o mês (filtro por mês no frontend)
 
+## Bolsistas
 | Tipo | `scholarship` | `discount` | Impacto financeiro |
 |---|---|---|---|
 | Regular | 0 | qualquer | Entra nos cálculos |
 | Bolsa parcial | 1 | 1-99% | Entra com desconto |
 | Bolsa integral | 1 | 100% | **Excluído dos cálculos** |
 
-- Impacto mensal calculado e exibido nos cards de bolsistas
-- Stat "Impacto bolsas" no header da tela de matrículas
-
 ---
 
 # 🖥️ 7. MÓDULOS DO SISTEMA
 
-## Dashboard
-- KPIs: Recebido, Esperado, Eficiência, Inadimplência
-- Saúde: Caixa, Total Consolidado, **Frequência Média**, Status Geral
-- Gráfico: Recebido vs Esperado — últimos 6 meses
-- Ranking de turmas por eficiência
-
-## Matrículas — EVOLUÍDO
-- **Aba Matrículas:** layout por turma em cards, sem tabela
-- **Aba Bolsistas:** cards com impacto financeiro detalhado
-- Dois formulários separados: Nova Matrícula / Nova Bolsa
-- Stats: Total, Ativas, Inativas, Bolsistas, Impacto bolsas
-
-## Presença — NOVO
-- Seleção de turma + data
-- Registro de chamada em lote (presente/ausente)
-- Botão "Todos presentes"
-- Histórico de frequência por turma com % e badges
-
-## Relatórios — EVOLUÍDO
-- Exportação **CSV** (resumo + ranking + pagamentos)
-- Exportação **PDF** via `window.print()`
-
-## Pagamentos — EVOLUÍDO
-- Layout profissional com `payments.css` dedicado
-- KPIs com borda colorida (sem fundo sólido)
-- Paginação 15/pág
+## Aulas Particulares — NOVO
+- **Aba Pacotes:** cards com barra de progresso, professores, local, preço total e por aula
+- **Aba Sessões:** toggle Por aluno / Por data — ações inline (✓ Realizada / ✖ Cancelar)
+- **Aba Pagamentos:** tabela com status, tipo (pacote/avulsa), botão marcar pago
 
 ---
 
-# 📱 8. RESPONSIVIDADE MOBILE/TABLET — NOVO
+# 📱 8. RESPONSIVIDADE MOBILE/TABLET
 
 ## Breakpoints
-
 | Breakpoint | Comportamento |
 |---|---|
 | > 1024px | Layout desktop completo |
 | 768px–1024px | Tablet: sidebar 200px, grids 2 colunas |
 | < 768px | Mobile: sidebar overlay + hamburguer |
 
-## Funcionalidades mobile
-
-- Menu hamburguer (☰) no header
-- Sidebar como overlay com backdrop escuro
-- Fecha automaticamente ao navegar
-- Grids de KPIs 2×2
-- Formulários em coluna única
-- Modais fullscreen (95vw)
-- Tabelas com scroll horizontal
-- Cards de matrícula adaptados
-
 ---
 
-# ⚠️ 9. INCIDENTES CRÍTICOS RESOLVIDOS (SESSÃO 3.0)
+# ⚠️ 9. INCIDENTES CRÍTICOS RESOLVIDOS (SESSÃO 4.0)
 
-## 9.1 Cash sem autenticação
-- **Causa:** `cashRoutes` não recebia `user` e não chamava `requireRole`
-- **Correção:** `user` passado via `index.ts`, `requireRole` adicionado em cada endpoint
+## 9.1 `sessions_used` incrementava ao agendar em vez de ao completar
+- **Causa:** Lógica de incremento no POST de sessão
+- **Correção:** Removido do POST, adicionado no PATCH quando `status = completed`
+- **Impacto:** Barra de progresso reflete apenas aulas realizadas, não agendadas
 
-## 9.2 `requireAuth` retornava `{ error: Response }` em vez de `Response`
-- **Causa:** Wrapping desnecessário quebrando `instanceof Response` no `index.ts`
-- **Correção:** `requireAuth` retorna `Response` diretamente em caso de erro
+## 9.2 Caixa mostrava acumulado histórico em entradas/saídas
+- **Causa:** Sem filtro de período nos cards de entradas/saídas
+- **Correção:** Saldo = acumulado histórico; Entradas/Saídas = apenas mês corrente
 
-## 9.3 Coluna `date` ausente em `cash_entries`
-- **Causa:** `cash.service.ts` refatorado para usar coluna `date` que não existia
-- **Correção:** Migration 0022 adicionou a coluna e migrou dados de `created_at`
+## 9.3 Abas de Aulas Particulares fora do padrão visual
+- **Causa:** Classe `.private-tab` sem CSS definido
+- **Correção:** Substituído por `.enrollment-tab` que já tem estilo correto
 
-## 9.4 `throw err` antes de `skipped++` em `payments.service.ts`
-- **Causa:** Código morto após `throw` — erro interrompia geração inteira
-- **Correção:** `try/catch` por registro, erro loga e pula sem interromper
-
-## 9.5 Register aberto permitia qualquer pessoa criar conta
-- **Causa:** Endpoint público sem restrição
-- **Correção:** Register bloqueado após primeiro admin criado
-
-## 9.6 Modal turmas não abria (`.hidden` vs `.active`)
-- **Causa:** CSS usava `.active` para mostrar, JS removia `.hidden`
-- **Correção:** JS usa `classList.add("active")` e CSS tem `display:flex` em `.active`
-
-## 9.7 `initDone` sem recarregar dados ao voltar para a página
-- **Causa:** `if(initDone) return` sem chamar `loadData()` ou re-registrar botões
-- **Correção:** Ao voltar, chama `loadData()` + `setupBtn()` antes de retornar
+## 9.4 Login mobile — card pequeno em tela escura
+- **Causa:** `height: 100vh` não funciona corretamente em alguns browsers mobile
+- **Correção:** `html, body { height: 100%; min-height: -webkit-fill-available }` + `width: 100%` no card
 
 ---
 
@@ -364,9 +352,10 @@ Students → Enrollments (regular + scholarship) → Payments → Cash → Dashb
 | Backend | 🟢 Estável | Todos os módulos em produção, varredura completa |
 | Autenticação | 🟢 Hardened | JWT 8h, register bloqueado, name no /me |
 | Frontend | 🟢 Estabilizado | SPA sem race conditions |
-| Financeiro | 🟢 Avançado | DRE + bolsistas + exportação |
+| Financeiro | 🟢 Avançado | DRE + bolsistas + exportação + caixa por mês |
 | Presença | 🟢 Ativo | Chamada + histórico + dashboard |
-| Mobile | 🟢 Responsivo | Hamburguer + overlay + grids adaptados |
+| Mobile | 🟢 Responsivo | Hamburguer + overlay + login corrigido |
+| Aulas Particulares | 🟢 Ativo | Pacotes + sessões + pagamentos + toggle de visão |
 | Deploy | 🟢 Estável | Cloudflare Pages + Workers |
 | Segurança | 🟢 Reforçada | Varredura completa de todas as rotas |
 
@@ -386,9 +375,9 @@ Students → Enrollments (regular + scholarship) → Payments → Cash → Dashb
 # 🚀 12. ROADMAP EVOLUTIVO
 
 ## Pendente curto prazo
-- [ ] Tela login mobile — card pequeno (login.css responsivo)
+- [ ] Integrar aulas particulares no Dashboard (receita consolidada)
+- [ ] Integrar aulas particulares nos Relatórios
 - [ ] Tabela Turmas/Professores no mobile — colunas cortadas
-- [ ] Relatórios — header duplicado no mobile
 - [ ] Refresh token
 - [ ] Logs estruturados no backend
 
@@ -396,6 +385,7 @@ Students → Enrollments (regular + scholarship) → Payments → Cash → Dashb
 - [ ] Filtro por unidade nos relatórios
 - [ ] Exportação de relatório de frequência
 - [ ] Notificações de inadimplência
+- [ ] Agenda visual (grid semanal por professor/aluno)
 - [ ] Perfis `teacher` e `financeiro` no RBAC
 
 ## Longo prazo
@@ -426,8 +416,9 @@ docs: atualização de documentação
 - Nunca fazer redirect fora do `auth.js`/`router.js`
 - Nunca armazenar `JWT_SECRET` no código
 - `document.addEventListener("click")` global **proibido** — causa interferência entre módulos
+- `git add .` **proibido** — sempre especificar arquivos explicitamente
 
 ---
 
 *Documento mantido pelo time de desenvolvimento.*
-*Última atualização: 30 de Março de 2026 — Sessão 3.0*
+*Última atualização: 30 de Março de 2026 — Sessão 4.0*
