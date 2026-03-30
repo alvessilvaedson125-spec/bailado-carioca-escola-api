@@ -74,9 +74,9 @@ export async function handlePrivateRoutes(
       );
     }
 
-    const sessions  = total_sessions || 4;
+    const sessions   = total_sessions || 4;
     const perSession = price_total / sessions;
-    const id = crypto.randomUUID();
+    const id         = crypto.randomUUID();
 
     await env.DB.prepare(`
       INSERT INTO private_packages (
@@ -90,10 +90,10 @@ export async function handlePrivateRoutes(
     .bind(
       id, student_id, teacher_1_id, teacher_2_id ?? null,
       sessions, price_total, perSession,
-      location_type || 'bailado_laranjeiras',
+      location_type  || 'bailado_laranjeiras',
       location_notes ?? null,
-      start_date ?? null,
-      notes ?? null
+      start_date     ?? null,
+      notes          ?? null
     )
     .run();
 
@@ -213,9 +213,9 @@ export async function handlePrivateRoutes(
 
     const params: any[] = [];
 
-    if (packageId) { query += ` AND ps.package_id = ?`;   params.push(packageId); }
-    if (studentId) { query += ` AND ps.student_id = ?`;   params.push(studentId); }
-    if (status)    { query += ` AND ps.status = ?`;        params.push(status); }
+    if (packageId) { query += ` AND ps.package_id = ?`; params.push(packageId); }
+    if (studentId) { query += ` AND ps.student_id = ?`; params.push(studentId); }
+    if (status)    { query += ` AND ps.status = ?`;      params.push(status);    }
 
     query += ` ORDER BY ps.scheduled_at DESC`;
 
@@ -258,41 +258,21 @@ export async function handlePrivateRoutes(
     `)
     .bind(
       id,
-      package_id      ?? null,
+      package_id       ?? null,
       student_id,
       teacher_1_id,
-      teacher_2_id    ?? null,
+      teacher_2_id     ?? null,
       scheduled_at,
       duration_minutes || 60,
-      price           || 0,
-      location_type   || 'bailado_laranjeiras',
-      location_notes  ?? null,
-      notes           ?? null
+      price            || 0,
+      location_type    || 'bailado_laranjeiras',
+      location_notes   ?? null,
+      notes            ?? null
     )
     .run();
 
-    // Se vinculada a pacote, incrementa sessions_used
-    if (package_id) {
-      await env.DB.prepare(`
-        UPDATE private_packages
-        SET sessions_used = sessions_used + 1,
-            updated_at    = datetime('now')
-        WHERE id = ?
-      `).bind(package_id).run();
-
-      // Verifica se pacote foi completado
-      const pkg = await env.DB.prepare(`
-        SELECT total_sessions, sessions_used FROM private_packages WHERE id = ?
-      `).bind(package_id).first() as any;
-
-      if (pkg && pkg.sessions_used >= pkg.total_sessions) {
-        await env.DB.prepare(`
-          UPDATE private_packages
-          SET status = 'completed', updated_at = datetime('now')
-          WHERE id = ?
-        `).bind(package_id).run();
-      }
-    }
+    // 🔥 NÃO incrementa sessions_used aqui
+    // sessions_used só sobe quando a aula for marcada como completed
 
     return Response.json({ success: true, id });
   }
@@ -331,21 +311,47 @@ export async function handlePrivateRoutes(
 
     await env.DB.prepare(`
       UPDATE private_sessions
-      SET status = ?, notes = COALESCE(?, notes), updated_at = datetime('now')
+      SET status     = ?,
+          notes      = COALESCE(?, notes),
+          updated_at = datetime('now')
       WHERE id = ?
     `).bind(status, notes ?? null, id).run();
 
-    // Se cancelada e tinha pacote, decrementa sessions_used
+    // 🔥 Marcada como COMPLETED — incrementa sessions_used no pacote
+    if (status === "completed" && existing.status !== "completed" && existing.package_id) {
+      await env.DB.prepare(`
+        UPDATE private_packages
+        SET sessions_used = sessions_used + 1,
+            updated_at    = datetime('now')
+        WHERE id = ?
+      `).bind(existing.package_id).run();
+
+      // Verifica se pacote foi concluído
+      const pkg = await env.DB.prepare(`
+        SELECT total_sessions, sessions_used FROM private_packages WHERE id = ?
+      `).bind(existing.package_id).first() as any;
+
+      if (pkg && pkg.sessions_used >= pkg.total_sessions) {
+        await env.DB.prepare(`
+          UPDATE private_packages
+          SET status     = 'completed',
+              updated_at = datetime('now')
+          WHERE id = ?
+        `).bind(existing.package_id).run();
+      }
+    }
+
+    // 🔥 Desmarcada (cancelled/no_show) — só decrementa se estava completed
     if (
       (status === "cancelled" || status === "no_show") &&
-      existing.status === "scheduled" &&
+      existing.status === "completed" &&
       existing.package_id
     ) {
       await env.DB.prepare(`
         UPDATE private_packages
         SET sessions_used = MAX(0, sessions_used - 1),
-            status = 'active',
-            updated_at = datetime('now')
+            status        = 'active',
+            updated_at    = datetime('now')
         WHERE id = ?
       `).bind(existing.package_id).run();
     }
@@ -406,11 +412,11 @@ export async function handlePrivateRoutes(
 
     await env.DB.prepare(`
       UPDATE private_payments
-      SET status = 'paid',
-          paid_at = datetime('now'),
+      SET status         = 'paid',
+          paid_at        = datetime('now'),
           payment_method = COALESCE(?, payment_method),
-          notes = COALESCE(?, notes),
-          updated_at = datetime('now')
+          notes          = COALESCE(?, notes),
+          updated_at     = datetime('now')
       WHERE id = ?
     `)
     .bind(body.payment_method ?? null, body.notes ?? null, id)
@@ -430,7 +436,7 @@ export async function handlePrivateRoutes(
     const { results } = await env.DB.prepare(`
       SELECT
         SUM(amount) as total_expected,
-        SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END) as total_paid,
+        SUM(CASE WHEN status = 'paid'    THEN amount ELSE 0 END) as total_paid,
         SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END) as total_pending
       FROM private_payments
       WHERE deleted_at IS NULL
