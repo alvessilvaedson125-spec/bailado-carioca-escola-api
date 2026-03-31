@@ -7,18 +7,20 @@ export async function handleStudentsRoutes(
   user: any
 ) {
   // =========================
-  // LISTAR TODOS
+  // LISTAR — filtra por origin
   // =========================
   if (url.pathname === "/api/v1/students" && request.method === "GET") {
     const roleError = requireRole(user, ["admin", "operator"]);
     if (roleError) return roleError;
 
-    const { results } = await env.DB.prepare(`
-      SELECT *
-      FROM students
-      WHERE deleted_at IS NULL
-      ORDER BY created_at DESC
-    `).all();
+    // 🔥 ?origin=school | origin=private | sem filtro = todos
+    const origin = url.searchParams.get("origin");
+
+    const query = origin
+      ? `SELECT * FROM students WHERE deleted_at IS NULL AND origin = '${origin}' ORDER BY created_at DESC`
+      : `SELECT * FROM students WHERE deleted_at IS NULL ORDER BY created_at DESC`;
+
+    const { results } = await env.DB.prepare(query).all();
 
     return Response.json({ success: true, data: results });
   }
@@ -58,7 +60,7 @@ export async function handleStudentsRoutes(
     if (roleError) return roleError;
 
     const body = (await request.json()) as any;
-    const { name, phone, email } = body;
+    const { name, phone, email, origin = "school" } = body;
 
     if (!name) {
       return Response.json(
@@ -70,9 +72,9 @@ export async function handleStudentsRoutes(
     const id = crypto.randomUUID();
 
     await env.DB.prepare(`
-      INSERT INTO students (id, name, phone, email, created_at, updated_at)
-      VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
-    `).bind(id, name, phone ?? null, email ?? null).run();
+      INSERT INTO students (id, name, phone, email, origin, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    `).bind(id, name, phone ?? null, email ?? null, origin).run();
 
     return Response.json({ success: true, id });
   }
