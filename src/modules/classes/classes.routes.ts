@@ -33,15 +33,15 @@ export async function handleClassesRoutes(
   LEFT JOIN teachers t        ON t.id = ct.teacher_id
   LEFT JOIN units u           ON u.id = c.unit_id
   LEFT JOIN (
-    SELECT
-      class_id,
-      SUM(CASE WHEN role IN ('conductor_m','conductor_f','leader','conductor') THEN 1 ELSE 0 END) AS conductors_count,
-      SUM(CASE WHEN role IN ('follower_f','follower_m','follower')             THEN 1 ELSE 0 END) AS followers_count,
-      SUM(CASE WHEN scholarship = 1                                            THEN 1 ELSE 0 END) AS scholarship_count
-    FROM enrollments
-    WHERE deleted_at IS NULL
-    GROUP BY class_id
-  ) ec ON ec.class_id = c.id
+  SELECT
+    class_id,
+    SUM(CASE WHEN scholarship = 0 AND role IN ('conductor_m','conductor_f','leader','conductor') THEN 1 ELSE 0 END) AS conductors_count,
+    SUM(CASE WHEN scholarship = 0 AND role IN ('follower_f','follower_m','follower')             THEN 1 ELSE 0 END) AS followers_count,
+    SUM(CASE WHEN scholarship = 1                                                                THEN 1 ELSE 0 END) AS scholarship_count
+  FROM enrollments
+  WHERE deleted_at IS NULL
+  GROUP BY class_id
+) ec ON ec.class_id = c.id
   WHERE c.deleted_at IS NULL
   GROUP BY c.id
   ORDER BY c.created_at DESC
