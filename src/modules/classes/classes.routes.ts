@@ -13,53 +13,37 @@ export async function handleClassesRoutes(
 
     
    const { results } = await env.DB.prepare(`
-SELECT
-  c.id,
-  c.name,
-  c.description,
-  c.teacher_id,
-  c.unit_id,
-  c.day_of_week,
-  c.start_time,
-  c.end_time,
-  c.created_at,
-
-GROUP_CONCAT(DISTINCT t.name) AS teacher_names,
-GROUP_CONCAT(DISTINCT t.id) AS teacher_ids,
-  u.name AS unit_name,
-
-
-  
-  SUM(CASE 
-        WHEN e.role IN ('leader','conductor') THEN 1 
-        ELSE 0 
-      END) AS conductors_count,
-
-  SUM(CASE 
-        WHEN e.role = 'follower' THEN 1 
-        ELSE 0 
-      END) AS followers_count
-
-FROM classes c
-
-LEFT JOIN class_teachers ct
-ON ct.class_id = c.id
-
-LEFT JOIN teachers t
-ON t.id = ct.teacher_id
-
-LEFT JOIN units u
-ON u.id = c.unit_id
-
-LEFT JOIN enrollments e
-ON e.class_id = c.id
-AND e.deleted_at IS NULL
-
-WHERE c.deleted_at IS NULL
-
-GROUP BY c.id
-
-ORDER BY c.created_at DESC
+  SELECT
+    c.id,
+    c.name,
+    c.description,
+    c.teacher_id,
+    c.unit_id,
+    c.day_of_week,
+    c.start_time,
+    c.end_time,
+    c.created_at,
+    GROUP_CONCAT(DISTINCT t.name) AS teacher_names,
+    GROUP_CONCAT(DISTINCT t.id)   AS teacher_ids,
+    u.name AS unit_name,
+    COALESCE(ec.conductors_count, 0) AS conductors_count,
+    COALESCE(ec.followers_count,  0) AS followers_count
+  FROM classes c
+  LEFT JOIN class_teachers ct ON ct.class_id = c.id
+  LEFT JOIN teachers t        ON t.id = ct.teacher_id
+  LEFT JOIN units u           ON u.id = c.unit_id
+  LEFT JOIN (
+    SELECT
+      class_id,
+      SUM(CASE WHEN role IN ('leader','conductor') THEN 1 ELSE 0 END) AS conductors_count,
+      SUM(CASE WHEN role = 'follower'              THEN 1 ELSE 0 END) AS followers_count
+    FROM enrollments
+    WHERE deleted_at IS NULL
+    GROUP BY class_id
+  ) ec ON ec.class_id = c.id
+  WHERE c.deleted_at IS NULL
+  GROUP BY c.id
+  ORDER BY c.created_at DESC
 `).all();
 
     return Response.json({
