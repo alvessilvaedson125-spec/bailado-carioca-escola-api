@@ -11,8 +11,7 @@ export async function handleClassesRoutes(
     const roleError = requireRole(user, ["admin", "operator"]);
     if (roleError) return roleError;
 
-    
-   const { results } = await env.DB.prepare(`
+    const { results } = await env.DB.prepare(`
   SELECT
     c.id,
     c.name,
@@ -26,21 +25,23 @@ export async function handleClassesRoutes(
     GROUP_CONCAT(DISTINCT t.name) AS teacher_names,
     GROUP_CONCAT(DISTINCT t.id)   AS teacher_ids,
     u.name AS unit_name,
-    COALESCE(ec.conductors_count, 0) AS conductors_count,
-    COALESCE(ec.followers_count,  0) AS followers_count
+    COALESCE(ec.conductors_count,  0) AS conductors_count,
+    COALESCE(ec.followers_count,   0) AS followers_count,
+    COALESCE(ec.scholarship_count, 0) AS scholarship_count
   FROM classes c
   LEFT JOIN class_teachers ct ON ct.class_id = c.id
   LEFT JOIN teachers t        ON t.id = ct.teacher_id
   LEFT JOIN units u           ON u.id = c.unit_id
- LEFT JOIN (
-  SELECT
-    class_id,
-    SUM(CASE WHEN role IN ('conductor_m','conductor_f','leader','conductor') THEN 1 ELSE 0 END) AS conductors_count,
-    SUM(CASE WHEN role IN ('follower_f','follower_m','follower')             THEN 1 ELSE 0 END) AS followers_count
-  FROM enrollments
-  WHERE deleted_at IS NULL
-  GROUP BY class_id
-) ec ON ec.class_id = c.id
+  LEFT JOIN (
+    SELECT
+      class_id,
+      SUM(CASE WHEN role IN ('conductor_m','conductor_f','leader','conductor') THEN 1 ELSE 0 END) AS conductors_count,
+      SUM(CASE WHEN role IN ('follower_f','follower_m','follower')             THEN 1 ELSE 0 END) AS followers_count,
+      SUM(CASE WHEN scholarship = 1                                            THEN 1 ELSE 0 END) AS scholarship_count
+    FROM enrollments
+    WHERE deleted_at IS NULL
+    GROUP BY class_id
+  ) ec ON ec.class_id = c.id
   WHERE c.deleted_at IS NULL
   GROUP BY c.id
   ORDER BY c.created_at DESC
