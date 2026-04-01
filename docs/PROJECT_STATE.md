@@ -1,8 +1,8 @@
 # Bailado Carioca — Gestão Escolar
 ## Documento de Estado do Projeto (PROJECT_STATE)
 
-> **Versão:** 6.1 — Abril 2026
-> **Status:** Produção ativa
+> **Versão:** 7.0 — Abril 2026
+> **Status:** Produção ativa — Pronto para uso real
 > **Classificação:** SaaS de gestão especializada
 
 ---
@@ -23,6 +23,7 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 | Relatórios filtráveis por período e turma | ✅ Implementado |
 | Exportação CSV e PDF | ✅ Implementado |
 | Autenticação JWT com HMAC SHA-256 | ✅ Implementado |
+| Refresh token automático | ✅ Implementado |
 | Paginação nas tabelas principais | ✅ Implementado |
 | Módulo de administração de usuários | ✅ Implementado |
 | Módulo de presença (chamada) | ✅ Implementado |
@@ -31,8 +32,10 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 | Impacto financeiro de bolsas | ✅ Implementado |
 | Layout por turma nas matrículas | ✅ Implementado |
 | Responsividade mobile/tablet | ✅ Implementado |
+| Tabela turmas em cards no mobile | ✅ Implementado |
 | Nome do usuário logado no header | ✅ Implementado |
 | Register bloqueado após primeiro admin | ✅ Implementado |
+| Validação de email duplicado | ✅ Implementado |
 | Caixa — saldo acumulado + entradas/saídas do mês | ✅ Implementado |
 | Aulas Particulares — pacotes, sessões, pagamentos | ✅ Implementado |
 | Sessões — toggle por aluno / por data colorido | ✅ Implementado |
@@ -45,6 +48,8 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 | Aba Alunos Externos em Aulas Particulares | ✅ Implementado |
 | Payment automático para aulas avulsas | ✅ Implementado |
 | Backup automático D1 via GitHub Actions | ✅ Implementado |
+| Proteção contra pagamento duplicado | ✅ Implementado |
+| Mensagem amigável ao expirar sessão | ✅ Implementado |
 
 ---
 
@@ -69,8 +74,9 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 ## 2.3 Controle de fluxo determinístico
 
 - `router.js` é o único ponto de `checkAuth` — módulos nunca chamam `checkAuth`
-- `api.js` não manipula `window.location`
+- `api.js` não manipula `window.location` diretamente
 - Redirecionamentos exclusivos do `auth.js`/`router.js`
+- Refresh token transparente — fila de requisições aguarda novo token
 
 ## 2.4 Regra de ouro de engenharia
 ```
@@ -99,7 +105,7 @@ Nunca quebrar fluxo existente
 | Runtime | Cloudflare Workers (edge serverless) |
 | Linguagem | TypeScript |
 | Banco | Cloudflare D1 — `bailado_carioca_escola_db` (081c69b7-c6ad-441b-98b7-84c555b7d147) |
-| Auth | JWT HMAC SHA-256 (crypto.subtle) |
+| Auth | JWT HMAC SHA-256 (crypto.subtle), 8h + refresh automático |
 | Backup | GitHub Actions — todo dia 03:00 UTC, artifacts 30 dias |
 
 ## 3.2 Estrutura do Frontend
@@ -110,14 +116,14 @@ bailado-carioca-erp-front/
 │   ├── students.css      ← perfil do aluno, total mensal
 │   ├── teachers.css      ← data-table padronizado
 │   ├── units.css         ← espaçamento correto
-│   ├── classes.css       ← modal .active, scholarship badge
+│   ├── classes.css       ← modal .active, scholarship badge, mobile cards
 │   └── ...
 ├── js/
-│   ├── api.js            ← signal corrigido
+│   ├── api.js            ← refresh token automático com fila
 │   ├── auth.js
 │   ├── router.js         ← único ponto de checkAuth
 │   ├── students.js       ← perfil do aluno, total mensal
-│   ├── classes.js        ← scholarship_count na tabela
+│   ├── classes.js        ← scholarship_count, data-label mobile
 │   ├── enrollments.js    ← setupTabs re-registrado, checkOpenEnrollmentModal
 │   ├── private.js        ← alunos externos, payment avulsa
 │   └── ...
@@ -131,9 +137,10 @@ bailado-carioca-erp-front/
 ```
 bailado-carioca-escola-api/
 ├── .github/workflows/
-│   └── backup.yml        ← backup automático D1, todo dia 03:00 UTC
+│   └── backup.yml           ← backup automático D1, todo dia 03:00 UTC
 ├── src/modules/
-│   ├── students/students.routes.ts  ← filtro origin, POST aceita origin
+│   ├── auth/auth.routes.ts  ← POST /refresh adicionado
+│   ├── students/students.routes.ts  ← filtro origin, validação email duplicado
 │   ├── classes/classes.routes.ts    ← scholarship_count na query
 │   ├── private/private.routes.ts    ← payment automático avulsa
 │   └── ...
@@ -147,11 +154,22 @@ bailado-carioca-escola-api/
 # 🔐 4. SEGURANÇA
 
 - JWT HMAC SHA-256, expiração 8h
+- Refresh token: `POST /api/v1/auth/refresh` — renova token transparentemente
 - RBAC: `admin` e `operator`
 - Register bloqueado após primeiro admin
 - `requireAuth` retorna `Response` diretamente
+- Validação de email duplicado em alunos e usuários
+- Proteção contra pagamento duplicado no backend
 
-## 4.1 Backup
+## 4.1 Fluxo de sessão
+```
+Login → token 8h
+→ Requisição com token válido → OK
+→ Requisição com token expirado → refresh automático → novo token → retry
+→ Refresh falhou → Toast "Sessão expirada" → redirect login após 2s
+```
+
+## 4.2 Backup
 
 | Item | Detalhe |
 |---|---|
@@ -160,7 +178,7 @@ bailado-carioca-escola-api/
 | Retenção | 30 dias de artifacts no GitHub |
 | Acesso | Actions → run → Artifacts → baixar `.sql` |
 | Manual | Actions → Run workflow → Run workflow |
-| Secrets necessários | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
+| Secrets | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
 
 ---
 
@@ -183,9 +201,9 @@ Students (origin=private) → private_packages → private_sessions → private_
 
 ### Regras de negócio
 - Pacote: `sessions_used` só incrementa quando sessão marcada como `completed`
-- Aula avulsa com `price > 0` → gera `private_payment` automaticamente com `status = pending`
+- Aula avulsa com `price > 0` → gera `private_payment` automaticamente
 - `origin_type = 'package'` para pacotes, `origin_type = 'session'` para avulsas
-- Selects de pacote/sessão mostram **todos** os alunos (escola + externos)
+- Selects mostram **todos** os alunos (escola + externos)
 
 ### Fluxo financeiro
 ```
@@ -221,41 +239,42 @@ Marcar pago → private_payment paid → aparece no recebido
 
 ## Alunos
 - Tabela com status ativo/inativo baseado em matrículas
-- **Perfil do aluno** — modal com todas as matrículas, papel, status e total mensal
+- **Perfil do aluno** — modal com matrículas, papel, status e total mensal
 - Botão "Matricular em outra turma" — navega para Matrículas com aluno pré-selecionado
-- Filtro `origin=school` implícito (alunos externos não aparecem aqui)
+- Validação de email duplicado no POST e PUT
+- Filtro `origin=school` implícito
 
 ## Turmas
-- Tabela com colunas: Nome, Professor, Unidade, Dia, Horário, **Alunos**, **Bolsistas**, Ações
-- Alunos = regulares (scholarship=0)
-- Bolsistas = scholarship=1, badge amarelo
+- Tabela com colunas: Nome, Professor, Unidade, Dia, Horário, Alunos, Bolsistas, Ações
+- No mobile: vira cards com `data-label`
+- Alunos = regulares (scholarship=0), Bolsistas = scholarship=1
 
 ## Matrículas
 - Aba Regular + Aba Bolsistas
-- `checkOpenEnrollmentModal` abre modal automaticamente vindo do perfil do aluno
-- Aluno pré-selecionado e bloqueado quando vindo do perfil
+- `checkOpenEnrollmentModal` abre modal com aluno pré-selecionado vindo do perfil
 
 ## Aulas Particulares
 - **Pacotes** — cards com barra de progresso
-- **Sessões** — toggle Por aluno / Por data (títulos coloridos: hoje=vermelho, semana=amarelo, próximas=verde, passadas=cinza)
-- **Pagamentos** — tabela com botão editar e marcar pago
+- **Sessões** — toggle Por aluno / Por data com títulos coloridos
+- **Pagamentos** — editar + marcar pago, proteção contra duplicado
 - **Alunos Externos** — CRUD completo, `origin=private`
+
+## API
+- Refresh token transparente com fila de requisições paralelas
+- Toast + redirect ao falhar refresh
+- Timeout de 10s por requisição
 
 ---
 
-# ⚠️ 8. INCIDENTES RESOLVIDOS (SESSÃO 6.0 + 6.1)
+# ⚠️ 8. INCIDENTES RESOLVIDOS (SESSÃO 7.0)
 
 | Problema | Correção |
 |---|---|
-| Aula avulsa não gerava payment | POST sessão cria `private_payment` se `!package_id && price > 0` |
-| Bolsista contado nos alunos regulares | Subquery separa `scholarship=0` dos alunos, `scholarship=1` na coluna bolsistas |
-| Aba bolsistas não abria ao voltar | `setupTabs` re-registrado no `if(initDone)` |
-| Modal turmas abre junto com a página | Tag `</div>` do modal fechada prematuramente |
-| Botão Ver aluno navegava para matrículas | Substituído por modal de perfil inline |
-| Alunos externos misturados com escola | Campo `origin` na tabela `students`, filtro por querystring |
-| `teachers.css` sem espaçamento | Reescrito com `data-table` padrão do sistema |
-| `units.css` sem espaçamento | Reescrito com espaçamento correto |
-| Backup D1 via wrangler export falhava no CI | Substituído por queries individuais por tabela via Wrangler execute |
+| Sessão expirava sem aviso | Refresh token automático + Toast + redirect |
+| Email duplicado em alunos | Validação no POST e PUT de students |
+| Tabela turmas cortada no mobile | Cards com `data-label` via CSS |
+| Mensagem ao expirar sessão | `tryRefreshToken` mostra Toast antes de redirecionar |
+| Pagamento duplicado | Backend rejeita PATCH se `status = paid` |
 
 ---
 
@@ -265,13 +284,15 @@ Marcar pago → private_payment paid → aparece no recebido
 |---|---|---|
 | Backend | 🟢 Estável | Todos os módulos em produção |
 | Frontend | 🟢 Limpo | Varredura completa concluída |
+| Autenticação | 🟢 Hardened | JWT 8h + refresh automático + mensagem de expiração |
 | Financeiro | 🟢 Avançado | DRE consolidado, avulsas com payment automático |
-| Alunos | 🟢 Completo | Perfil, matrículas, total mensal, origin |
-| Turmas | 🟢 Completo | Bolsistas separados na contagem |
+| Alunos | 🟢 Completo | Perfil, matrículas, total mensal, origin, email único |
+| Turmas | 🟢 Completo | Bolsistas separados, mobile em cards |
 | Aulas Particulares | 🟢 Completo | Pacotes + sessões + pagamentos + externos |
-| Mobile | 🟢 Responsivo | Hamburguer + overlay |
+| Mobile | 🟢 Responsivo | Hamburguer + overlay + cards de turma |
 | Deploy | 🟢 Estável | Cloudflare Pages + Workers |
-| Backup | 🟢 Automático | GitHub Actions, todo dia 03:00 UTC, 30 dias de retenção |
+| Backup | 🟢 Automático | GitHub Actions, 03:00 UTC, 30 dias |
+| Segurança | 🟢 Reforçada | Email único, pagamento duplicado bloqueado |
 
 ---
 
@@ -289,8 +310,6 @@ Marcar pago → private_payment paid → aparece no recebido
 # 🚀 11. ROADMAP
 
 ## Curto prazo
-- [ ] Tabela Turmas/Professores no mobile — colunas cortadas
-- [ ] Refresh token
 - [ ] Logs estruturados no backend
 - [ ] Filtro por unidade nos relatórios
 - [ ] Exportação de relatório de frequência
@@ -321,4 +340,4 @@ Marcar pago → private_payment paid → aparece no recebido
 
 ---
 
-*Última atualização: 01 de Abril de 2026 — Sessão 6.1*
+*Última atualização: 01 de Abril de 2026 — Sessão 7.0*
