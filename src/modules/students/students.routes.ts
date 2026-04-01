@@ -69,6 +69,21 @@ export async function handleStudentsRoutes(
       );
     }
 
+    // 🔥 Verifica email duplicado
+    if (email) {
+      const emailExists = await env.DB.prepare(`
+        SELECT id FROM students
+        WHERE email = ? AND deleted_at IS NULL
+      `).bind(email).first();
+
+      if (emailExists) {
+        return Response.json(
+          { success: false, message: "Este email já está cadastrado" },
+          { status: 400 }
+        );
+      }
+    }
+
     const id = crypto.randomUUID();
 
     await env.DB.prepare(`
@@ -97,11 +112,26 @@ export async function handleStudentsRoutes(
       WHERE id = ? AND deleted_at IS NULL
     `).bind(id).first();
 
-    if (!existing) {
+   if (!existing) {
       return Response.json(
         { success: false, message: "Student not found" },
         { status: 404 }
       );
+    }
+
+    // 🔥 Verifica email duplicado (ignora o próprio aluno)
+    if (body.email) {
+      const emailExists = await env.DB.prepare(`
+        SELECT id FROM students
+        WHERE email = ? AND deleted_at IS NULL AND id != ?
+      `).bind(body.email, id).first();
+
+      if (emailExists) {
+        return Response.json(
+          { success: false, message: "Este email já está cadastrado" },
+          { status: 400 }
+        );
+      }
     }
 
     // Registra histórico se telefone mudar
