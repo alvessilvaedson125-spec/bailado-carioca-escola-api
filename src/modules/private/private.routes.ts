@@ -225,8 +225,7 @@ export async function handlePrivateRoutes(
 
     return Response.json({ success: true, data: results });
   }
-
-  // CRIAR SESSÃO
+// CRIAR SESSÃO
   if (url.pathname === "/api/v1/private/sessions" && request.method === "POST") {
     const roleError = requireRole(user, ["admin", "operator"]);
     if (roleError) return roleError;
@@ -271,8 +270,19 @@ export async function handlePrivateRoutes(
     )
     .run();
 
-    // 🔥 NÃO incrementa sessions_used aqui
-    // sessions_used só sobe quando a aula for marcada como completed
+    // 🔥 Aula avulsa com valor — gera payment automático
+    if (!package_id && price && price > 0) {
+      const paymentId = crypto.randomUUID();
+      await env.DB.prepare(`
+        INSERT INTO private_payments (
+          id, origin_type, origin_id, student_id,
+          amount, status, created_at, updated_at
+        )
+        VALUES (?, 'session', ?, ?, ?, 'pending', datetime('now'), datetime('now'))
+      `)
+      .bind(paymentId, id, student_id, price)
+      .run();
+    }
 
     return Response.json({ success: true, id });
   }
