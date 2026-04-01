@@ -1,7 +1,7 @@
 # Bailado Carioca — Gestão Escolar
 ## Documento de Estado do Projeto (PROJECT_STATE)
 
-> **Versão:** 6.0 — Abril 2026
+> **Versão:** 6.1 — Abril 2026
 > **Status:** Produção ativa
 > **Classificação:** SaaS de gestão especializada
 
@@ -44,6 +44,7 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 | Alunos externos (origin=private) | ✅ Implementado |
 | Aba Alunos Externos em Aulas Particulares | ✅ Implementado |
 | Payment automático para aulas avulsas | ✅ Implementado |
+| Backup automático D1 via GitHub Actions | ✅ Implementado |
 
 ---
 
@@ -99,6 +100,7 @@ Nunca quebrar fluxo existente
 | Linguagem | TypeScript |
 | Banco | Cloudflare D1 — `bailado_carioca_escola_db` (081c69b7-c6ad-441b-98b7-84c555b7d147) |
 | Auth | JWT HMAC SHA-256 (crypto.subtle) |
+| Backup | GitHub Actions — todo dia 03:00 UTC, artifacts 30 dias |
 
 ## 3.2 Estrutura do Frontend
 ```
@@ -128,6 +130,8 @@ bailado-carioca-erp-front/
 ## 3.3 Estrutura do Backend
 ```
 bailado-carioca-escola-api/
+├── .github/workflows/
+│   └── backup.yml        ← backup automático D1, todo dia 03:00 UTC
 ├── src/modules/
 │   ├── students/students.routes.ts  ← filtro origin, POST aceita origin
 │   ├── classes/classes.routes.ts    ← scholarship_count na query
@@ -147,6 +151,17 @@ bailado-carioca-escola-api/
 - Register bloqueado após primeiro admin
 - `requireAuth` retorna `Response` diretamente
 
+## 4.1 Backup
+
+| Item | Detalhe |
+|---|---|
+| Estratégia | GitHub Actions + Wrangler queries por tabela |
+| Frequência | Todo dia às 03:00 UTC (00:00 Brasília) |
+| Retenção | 30 dias de artifacts no GitHub |
+| Acesso | Actions → run → Artifacts → baixar `.sql` |
+| Manual | Actions → Run workflow → Run workflow |
+| Secrets necessários | `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` |
+
 ---
 
 # 🧩 5. MODELO DE DOMÍNIO
@@ -158,6 +173,7 @@ Students (origin=private) → private_packages → private_sessions → private_
 ```
 
 ## Alunos — origin
+
 | origin | Descrição |
 |---|---|
 | `school` | Aluno da escola — aparece em Alunos e pode ser matriculado |
@@ -192,6 +208,7 @@ Marcar pago → private_payment paid → aparece no recebido
 - Entradas/Saídas = apenas mês corrente
 
 ## Bolsistas
+
 | Tipo | `scholarship` | `discount` | Contagem turma |
 |---|---|---|---|
 | Regular | 0 | qualquer | Coluna Alunos |
@@ -226,7 +243,7 @@ Marcar pago → private_payment paid → aparece no recebido
 
 ---
 
-# ⚠️ 8. INCIDENTES RESOLVIDOS (SESSÃO 6.0)
+# ⚠️ 8. INCIDENTES RESOLVIDOS (SESSÃO 6.0 + 6.1)
 
 | Problema | Correção |
 |---|---|
@@ -238,6 +255,7 @@ Marcar pago → private_payment paid → aparece no recebido
 | Alunos externos misturados com escola | Campo `origin` na tabela `students`, filtro por querystring |
 | `teachers.css` sem espaçamento | Reescrito com `data-table` padrão do sistema |
 | `units.css` sem espaçamento | Reescrito com espaçamento correto |
+| Backup D1 via wrangler export falhava no CI | Substituído por queries individuais por tabela via Wrangler execute |
 
 ---
 
@@ -253,6 +271,7 @@ Marcar pago → private_payment paid → aparece no recebido
 | Aulas Particulares | 🟢 Completo | Pacotes + sessões + pagamentos + externos |
 | Mobile | 🟢 Responsivo | Hamburguer + overlay |
 | Deploy | 🟢 Estável | Cloudflare Pages + Workers |
+| Backup | 🟢 Automático | GitHub Actions, todo dia 03:00 UTC, 30 dias de retenção |
 
 ---
 
@@ -302,4 +321,4 @@ Marcar pago → private_payment paid → aparece no recebido
 
 ---
 
-*Última atualização: 01 de Abril de 2026 — Sessão 6.0*
+*Última atualização: 01 de Abril de 2026 — Sessão 6.1*
