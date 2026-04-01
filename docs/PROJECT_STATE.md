@@ -1,8 +1,8 @@
 # Bailado Carioca — Gestão Escolar
 ## Documento de Estado do Projeto (PROJECT_STATE)
 
-> **Versão:** 7.0 — Abril 2026
-> **Status:** Produção ativa — Pronto para uso real
+> **Versão:** 8.0 — Abril 2026
+> **Status:** Produção ativa — Em uso real
 > **Classificação:** SaaS de gestão especializada
 
 ---
@@ -19,7 +19,8 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 | Expansão multiunidade | ✅ Suportado |
 | Motor financeiro com DRE | ✅ Implementado |
 | Geração automática de mensalidades | ✅ Implementado |
-| Dashboard executivo com KPIs | ✅ Implementado |
+| Dashboard executivo com KPIs separados | ✅ Implementado |
+| Eficiência separada — Turmas vs Particulares | ✅ Implementado |
 | Relatórios filtráveis por período e turma | ✅ Implementado |
 | Exportação CSV e PDF | ✅ Implementado |
 | Autenticação JWT com HMAC SHA-256 | ✅ Implementado |
@@ -31,8 +32,11 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 | Bolsistas com formulário separado | ✅ Implementado |
 | Impacto financeiro de bolsas | ✅ Implementado |
 | Layout por turma nas matrículas | ✅ Implementado |
-| Responsividade mobile/tablet | ✅ Implementado |
+| Responsividade mobile/tablet completa | ✅ Implementado |
+| Bottom navigation bar no mobile | ✅ Implementado |
+| Drawer "Mais" para páginas secundárias | ✅ Implementado |
 | Tabela turmas em cards no mobile | ✅ Implementado |
+| Páginas mobile sem scroll horizontal | ✅ Implementado |
 | Nome do usuário logado no header | ✅ Implementado |
 | Register bloqueado após primeiro admin | ✅ Implementado |
 | Validação de email duplicado | ✅ Implementado |
@@ -50,6 +54,9 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 | Backup automático D1 via GitHub Actions | ✅ Implementado |
 | Proteção contra pagamento duplicado | ✅ Implementado |
 | Mensagem amigável ao expirar sessão | ✅ Implementado |
+| Logo na tela de login | ✅ Implementado |
+| PWA instalável no mobile | ✅ Implementado |
+| Banco zerado — pronto para uso real | ✅ Concluído |
 
 ---
 
@@ -98,6 +105,8 @@ Nunca quebrar fluxo existente
 | Linguagem | HTML + CSS + JavaScript puro |
 | Hospedagem | Cloudflare Pages |
 | Arquitetura | SPA manual com router custom |
+| Mobile | Bottom navigation bar + drawer |
+| PWA | manifest.json + ícones 192/512px |
 
 ### Backend
 | Camada | Tecnologia |
@@ -111,25 +120,33 @@ Nunca quebrar fluxo existente
 ## 3.2 Estrutura do Frontend
 ```
 bailado-carioca-erp-front/
+├── images/
+│   ├── icon-192.png      ← ícone PWA
+│   ├── icon-512.png      ← ícone PWA splash
+│   └── logo.png          ← logo tela de login
 ├── css/pages/
+│   ├── attendance.css    ← mobile corrigido
+│   ├── cash.css          ← mobile corrigido
+│   ├── reports.css       ← mobile corrigido, KPIs eficiência separados
+│   ├── teachers.css      ← mobile corrigido
+│   ├── admin.css         ← mobile corrigido
+│   ├── dashboard.css     ← redesign hierarquia visual, eficiência com barra
 │   ├── private.css       ← títulos por data coloridos
 │   ├── students.css      ← perfil do aluno, total mensal
-│   ├── teachers.css      ← data-table padronizado
-│   ├── units.css         ← espaçamento correto
 │   ├── classes.css       ← modal .active, scholarship badge, mobile cards
 │   └── ...
 ├── js/
 │   ├── api.js            ← refresh token automático com fila
-│   ├── auth.js
 │   ├── router.js         ← único ponto de checkAuth
 │   ├── students.js       ← perfil do aluno, total mensal
 │   ├── classes.js        ← scholarship_count, data-label mobile
 │   ├── enrollments.js    ← setupTabs re-registrado, checkOpenEnrollmentModal
 │   ├── private.js        ← alunos externos, payment avulsa
+│   ├── dashboard.js      ← eficiência separada turmas vs particulares
 │   └── ...
-├── students.html         ← modal perfil separado
-├── classes.html          ← th Bolsistas
-├── private.html          ← aba Alunos Externos
+├── manifest.json         ← PWA manifest
+├── app.html              ← bottom nav + drawer mobile
+├── index.html            ← logo + meta PWA
 └── ...
 ```
 
@@ -218,8 +235,8 @@ Marcar pago → private_payment paid → aparece no recebido
 
 ## DRE Consolidado
 - Mensalidades (`payments`) + Aulas Particulares (`private_payments`)
-- Dashboard: `recebidoTotal = recebido + privPaid`
-- Relatórios: DRE com linha separada por origem
+- Dashboard: eficiência separada por origem
+- Relatórios: DRE com linha separada por origem + KPIs de eficiência independentes
 
 ## Caixa
 - Saldo = acumulado histórico
@@ -235,68 +252,87 @@ Marcar pago → private_payment paid → aparece no recebido
 
 ---
 
-# 🖥️ 7. MÓDULOS — ESTADO ATUAL
+# 📱 7. MOBILE — NAVEGAÇÃO
+
+## Bottom Navigation Bar
+- **Painel** · **Alunos** · **Pagamentos** · **Matrículas** · **Mais**
+- Drawer "Mais": Turmas · Presença · Caixa · Relatórios · Particulares · Professores · Unidades · Admin
+- Sidebar desktop mantida intacta
+- Bottom nav e drawer invisíveis no desktop (`display: none` acima de 768px)
+
+## PWA
+- `manifest.json` com nome, cores e ícones
+- Ícones: `icon-192.png` e `icon-512.png`
+- Instalável via "Adicionar à tela inicial" no Chrome/Safari
+- `theme_color: #0f172a` — dark navy
+
+---
+
+# 🖥️ 8. MÓDULOS — ESTADO ATUAL
+
+## Dashboard
+- Linha 1: Recebido (destaque) · Esperado · Inadimplência
+- Linha 2: Eficiência Turmas + barra animada · Eficiência Particulares + barra animada
+- Linha 3: Caixa · Total Consolidado · Aulas Particulares · Frequência
+- Linha 4: Status Geral horizontal com contadores
+- Linha 5: Gráfico Recebido vs Esperado
+- Linha 6: Ranking de Turmas
 
 ## Alunos
-- Tabela com status ativo/inativo baseado em matrículas
-- **Perfil do aluno** — modal com matrículas, papel, status e total mensal
-- Botão "Matricular em outra turma" — navega para Matrículas com aluno pré-selecionado
-- Validação de email duplicado no POST e PUT
-- Filtro `origin=school` implícito
+- Perfil inline com matrículas, papel, status e total mensal consolidado
+- Botão "Matricular em outra turma" pré-seleciona aluno
 
 ## Turmas
-- Tabela com colunas: Nome, Professor, Unidade, Dia, Horário, Alunos, Bolsistas, Ações
-- No mobile: vira cards com `data-label`
-- Alunos = regulares (scholarship=0), Bolsistas = scholarship=1
+- Colunas: Nome · Professor · Unidade · Dia · Horário · Alunos · Bolsistas · Ações
+- Mobile: vira cards com `data-label`
 
 ## Matrículas
 - Aba Regular + Aba Bolsistas
-- `checkOpenEnrollmentModal` abre modal com aluno pré-selecionado vindo do perfil
+- Modal abre automaticamente com aluno pré-selecionado vindo do perfil
 
 ## Aulas Particulares
-- **Pacotes** — cards com barra de progresso
-- **Sessões** — toggle Por aluno / Por data com títulos coloridos
-- **Pagamentos** — editar + marcar pago, proteção contra duplicado
-- **Alunos Externos** — CRUD completo, `origin=private`
-
-## API
-- Refresh token transparente com fila de requisições paralelas
-- Toast + redirect ao falhar refresh
-- Timeout de 10s por requisição
+- Pacotes com barra de progresso
+- Sessões toggle Por aluno / Por data com títulos coloridos
+- Pagamentos com editar + marcar pago
+- Alunos Externos CRUD completo
 
 ---
 
-# ⚠️ 8. INCIDENTES RESOLVIDOS (SESSÃO 7.0)
+# ⚠️ 9. INCIDENTES RESOLVIDOS (SESSÃO 8.0)
 
 | Problema | Correção |
 |---|---|
-| Sessão expirava sem aviso | Refresh token automático + Toast + redirect |
-| Email duplicado em alunos | Validação no POST e PUT de students |
-| Tabela turmas cortada no mobile | Cards com `data-label` via CSS |
-| Mensagem ao expirar sessão | `tryRefreshToken` mostra Toast antes de redirecionar |
-| Pagamento duplicado | Backend rejeita PATCH se `status = paid` |
+| Eficiência consolidava turmas + particulares | Separado em dois cards com barra de progresso |
+| Cards com cores invertidas no dashboard | CSS duplicado removido, background sempre white |
+| Mobile sem navegação adequada | Bottom nav + drawer substituindo hamburguer |
+| Scroll horizontal em 5 páginas mobile | flex-wrap, min-width, overflow-x corrigidos |
+| Bottom drawer aparecia no desktop | `display: none` acima de 768px |
+| Tela de login sem identidade visual | Logo do Bailado Carioca adicionada |
+| PWA não instalável | manifest.json + ícones + meta tags Apple |
+| Banco com dados de teste | Zerado para uso real |
 
 ---
 
-# 🏁 9. STATUS ATUAL
+# 🏁 10. STATUS ATUAL
 
 | Área | Status | Detalhe |
 |---|---|---|
 | Backend | 🟢 Estável | Todos os módulos em produção |
 | Frontend | 🟢 Limpo | Varredura completa concluída |
-| Autenticação | 🟢 Hardened | JWT 8h + refresh automático + mensagem de expiração |
-| Financeiro | 🟢 Avançado | DRE consolidado, avulsas com payment automático |
-| Alunos | 🟢 Completo | Perfil, matrículas, total mensal, origin, email único |
+| Autenticação | 🟢 Hardened | JWT 8h + refresh automático |
+| Financeiro | 🟢 Avançado | DRE consolidado, eficiência separada |
+| Dashboard | 🟢 Redesenhado | Hierarquia visual clara, barras de eficiência |
+| Alunos | 🟢 Completo | Perfil, matrículas, total mensal, origin |
 | Turmas | 🟢 Completo | Bolsistas separados, mobile em cards |
 | Aulas Particulares | 🟢 Completo | Pacotes + sessões + pagamentos + externos |
-| Mobile | 🟢 Responsivo | Hamburguer + overlay + cards de turma |
+| Mobile | 🟢 Completo | Bottom nav + drawer + PWA instalável |
 | Deploy | 🟢 Estável | Cloudflare Pages + Workers |
 | Backup | 🟢 Automático | GitHub Actions, 03:00 UTC, 30 dias |
-| Segurança | 🟢 Reforçada | Email único, pagamento duplicado bloqueado |
+| Dados | 🟢 Zerado | Banco limpo — uso real iniciado |
 
 ---
 
-# 📋 10. USUÁRIOS DO SISTEMA (PRODUÇÃO)
+# 📋 11. USUÁRIOS DO SISTEMA (PRODUÇÃO)
 
 | Email | Role |
 |---|---|
@@ -307,7 +343,7 @@ Marcar pago → private_payment paid → aparece no recebido
 
 ---
 
-# 🚀 11. ROADMAP
+# 🚀 12. ROADMAP
 
 ## Curto prazo
 - [ ] Logs estruturados no backend
@@ -322,12 +358,11 @@ Marcar pago → private_payment paid → aparece no recebido
 ## Longo prazo
 - [ ] Multi-tenant real
 - [ ] Billing SaaS
-- [ ] PWA / App mobile nativo
 - [ ] Integração com gateway de pagamento
 
 ---
 
-# 📋 12. REGRAS INVIOLÁVEIS
+# 📋 13. REGRAS INVIOLÁVEIS
 
 - Nunca usar `alert()` — usar `Toast`
 - Nunca usar `onclick` inline no HTML
@@ -340,4 +375,4 @@ Marcar pago → private_payment paid → aparece no recebido
 
 ---
 
-*Última atualização: 01 de Abril de 2026 — Sessão 7.0*
+*Última atualização: 01 de Abril de 2026 — Sessão 8.0*
