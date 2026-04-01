@@ -161,5 +161,46 @@ export async function handleAuthRoutes(
     });
   }
 
+  // =========================
+  // REFRESH TOKEN
+  // =========================
+  if (url.pathname === "/api/v1/auth/refresh" && request.method === "POST") {
+    if (!user) {
+      return Response.json(
+        { success: false, message: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // Verifica se o usuário ainda existe e está ativo
+    const userData = await env.DB.prepare(
+      "SELECT id, name, role FROM users WHERE id = ? AND deleted_at IS NULL"
+    ).bind(user.userId).first();
+
+    if (!userData) {
+      return Response.json(
+        { success: false, message: "User not found" },
+        { status: 401 }
+      );
+    }
+
+    // Gera novo token com mais 8h
+    const token = await generateJWT(
+      { userId: userData.id, role: userData.role },
+      env.JWT_SECRET,
+      1000 * 60 * 60 * 8
+    );
+
+    return Response.json({
+      success: true,
+      token,
+      user: {
+        userId: userData.id,
+        name:   userData.name,
+        role:   userData.role
+      }
+    });
+  }
+
   return null;
 }
