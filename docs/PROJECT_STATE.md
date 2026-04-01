@@ -1,7 +1,7 @@
 # Bailado Carioca — Gestão Escolar
 ## Documento de Estado do Projeto (PROJECT_STATE)
 
-> **Versão:** 5.0 — Março 2026
+> **Versão:** 6.0 — Abril 2026
 > **Status:** Produção ativa
 > **Classificação:** SaaS de gestão especializada
 
@@ -35,10 +35,15 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 | Register bloqueado após primeiro admin | ✅ Implementado |
 | Caixa — saldo acumulado + entradas/saídas do mês | ✅ Implementado |
 | Aulas Particulares — pacotes, sessões, pagamentos | ✅ Implementado |
-| Sessões — toggle por aluno / por data | ✅ Implementado |
+| Sessões — toggle por aluno / por data colorido | ✅ Implementado |
 | Dashboard integrado com aulas particulares | ✅ Implementado |
-| Relatórios com DRE consolidado (mensalidades + particulares) | ✅ Implementado |
+| Relatórios com DRE consolidado | ✅ Implementado |
 | Varredura completa de qualidade do frontend | ✅ Concluído |
+| Perfil do aluno com matrículas e total mensal | ✅ Implementado |
+| Coluna bolsistas separada na tabela de turmas | ✅ Implementado |
+| Alunos externos (origin=private) | ✅ Implementado |
+| Aba Alunos Externos em Aulas Particulares | ✅ Implementado |
+| Payment automático para aulas avulsas | ✅ Implementado |
 
 ---
 
@@ -49,7 +54,7 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 - Nenhuma regra crítica reside no frontend
 - Toda validação e lógica de negócio são centralizadas no backend
 - O frontend é estritamente uma camada de apresentação
-- IDs são tratados como **strings (UUID)** em todas as camadas — conversão numérica é proibida
+- IDs são tratados como **strings (UUID)** em todas as camadas
 
 ## 2.2 Separação de responsabilidades
 
@@ -62,29 +67,11 @@ O **Bailado Carioca — Gestão Escolar** é uma plataforma SaaS modular de gest
 
 ## 2.3 Controle de fluxo determinístico
 
-- Nenhuma decisão crítica ocorre em múltiplos pontos
-- Navegação e autenticação possuem pontos únicos de decisão
 - `router.js` é o único ponto de `checkAuth` — módulos nunca chamam `checkAuth`
-- `api.js` não manipula `window.location` em nenhuma circunstância
+- `api.js` não manipula `window.location`
+- Redirecionamentos exclusivos do `auth.js`/`router.js`
 
-## 2.4 Evolução sem ruptura
-
-- Deploy incremental
-- Versionamento disciplinado com commits atômicos por feature
-- Migrações idempotentes
-- Compatibilidade retroativa sempre que possível
-
-## 2.5 Segurança progressiva
-
-- JWT assinado com **HMAC SHA-256** via `crypto.subtle` (Web Crypto API)
-- Expiração em **8 horas** (segundos, padrão RFC 7519)
-- RBAC ativo com perfis `admin` e `operator`
-- Expiração de sessão baseada em status HTTP 401
-- Controle de sessão centralizado em `router.js` (checkAuth)
-- Register público bloqueado após criação do primeiro admin
-- Cash routes exigem autenticação obrigatória
-
-## 2.6 Regra de ouro de engenharia
+## 2.4 Regra de ouro de engenharia
 ```
 Um passo por vez
 Commit antes de mudar
@@ -104,113 +91,50 @@ Nunca quebrar fluxo existente
 | Linguagem | HTML + CSS + JavaScript puro |
 | Hospedagem | Cloudflare Pages |
 | Arquitetura | SPA manual com router custom |
-| Estilização | CSS modular por página + componentes globais |
 
 ### Backend
 | Camada | Tecnologia |
 |---|---|
 | Runtime | Cloudflare Workers (edge serverless) |
 | Linguagem | TypeScript |
-| Banco de dados | Cloudflare D1 (SQLite serverless) — `bailado_carioca_escola_db` (UUID: 081c69b7-c6ad-441b-98b7-84c555b7d147) |
-| Autenticação | JWT HMAC SHA-256 (crypto.subtle) |
+| Banco | Cloudflare D1 — `bailado_carioca_escola_db` (081c69b7-c6ad-441b-98b7-84c555b7d147) |
+| Auth | JWT HMAC SHA-256 (crypto.subtle) |
 
 ## 3.2 Estrutura do Frontend
 ```
 bailado-carioca-erp-front/
-├── css/
-│   ├── pages/
-│   │   ├── admin.css
-│   │   ├── attendance.css
-│   │   ├── cash.css
-│   │   ├── classes.css
-│   │   ├── dashboard.css
-│   │   ├── enrollments.css
-│   │   ├── finance.css
-│   │   ├── login.css
-│   │   ├── payments.css
-│   │   ├── private.css
-│   │   ├── reports.css
-│   │   ├── students.css
-│   │   ├── teachers.css
-│   │   └── units.css
-│   ├── base.css
-│   ├── components.css
-│   ├── layout.css
-│   ├── style.css
-│   └── variables.css
+├── css/pages/
+│   ├── private.css       ← títulos por data coloridos
+│   ├── students.css      ← perfil do aluno, total mensal
+│   ├── teachers.css      ← data-table padronizado
+│   ├── units.css         ← espaçamento correto
+│   ├── classes.css       ← modal .active, scholarship badge
+│   └── ...
 ├── js/
-│   ├── api.js               ← typo signal corrigido
+│   ├── api.js            ← signal corrigido
 │   ├── auth.js
-│   ├── attendance.js        ← checkAuth removido
-│   ├── cash.js              ← eventos globais removidos
-│   ├── classes.js
-│   ├── dashboard.js         ← integrado com particulares
-│   ├── enrollments.js       ← setupTabs re-registrado, scholarship Number()
-│   ├── finance.js           ← privatePayments no cálculo consolidado
-│   ├── payments.js          ← loadCashflow sem requisição dupla
-│   ├── private.js
-│   ├── reports.js           ← checkAuth removido, initDone adicionado
-│   ├── router.js
-│   ├── students.js          ← checkAuth removido
-│   ├── teachers.js          ← alert→Toast, onclick inline removido
-│   ├── toast.js
-│   ├── units.js             ← checkAuth removido
-│   └── utils.js
-├── admin.html
-├── app.html
-├── attendance.html
-├── cash.html                ← onclick inline removido
-├── classes.html             ← tag modal corrigida
-├── dashboard.html           ← h2→h1
-├── enrollments.html
-├── index.html
-├── payments.html
-├── private.html
-├── reports.html
-├── students.html
-├── teachers.html            ← page-header padronizado
-└── units.html
+│   ├── router.js         ← único ponto de checkAuth
+│   ├── students.js       ← perfil do aluno, total mensal
+│   ├── classes.js        ← scholarship_count na tabela
+│   ├── enrollments.js    ← setupTabs re-registrado, checkOpenEnrollmentModal
+│   ├── private.js        ← alunos externos, payment avulsa
+│   └── ...
+├── students.html         ← modal perfil separado
+├── classes.html          ← th Bolsistas
+├── private.html          ← aba Alunos Externos
+└── ...
 ```
 
 ## 3.3 Estrutura do Backend
 ```
 bailado-carioca-escola-api/
-├── src/
-│   ├── modules/
-│   │   ├── admin/
-│   │   │   └── admin.routes.ts
-│   │   ├── attendance/
-│   │   │   └── attendance.routes.ts
-│   │   ├── auth/
-│   │   │   └── auth.routes.ts
-│   │   ├── classes/
-│   │   │   └── classes.routes.ts  ← roles conductor_m/f, follower_f/m corrigidos
-│   │   ├── enrollments/
-│   │   │   └── enrollments.routes.ts
-│   │   ├── payments/
-│   │   │   ├── payments.routes.ts
-│   │   │   ├── payments.service.ts
-│   │   │   ├── cash.routes.ts
-│   │   │   └── cash.service.ts
-│   │   ├── private/
-│   │   │   └── private.routes.ts
-│   │   ├── students/
-│   │   │   └── students.routes.ts
-│   │   ├── teachers/
-│   │   │   └── teachers.routes.ts
-│   │   └── units/
-│   │       └── units.routes.ts
-│   ├── security/
-│   │   ├── authorize.ts
-│   │   └── jwt.ts
-│   └── index.ts
+├── src/modules/
+│   ├── students/students.routes.ts  ← filtro origin, POST aceita origin
+│   ├── classes/classes.routes.ts    ← scholarship_count na query
+│   ├── private/private.routes.ts    ← payment automático avulsa
+│   └── ...
 ├── migrations/
-│   ├── 0001 a 0022 ...
-│   ├── 0023_create_private_packages.sql
-│   ├── 0024_create_private_sessions.sql
-│   └── 0025_create_private_payments.sql
-├── docs/
-│   └── PROJECT_STATE.md
+│   └── 0026: ALTER TABLE students ADD COLUMN origin TEXT NOT NULL DEFAULT 'school'
 └── wrangler.jsonc
 ```
 
@@ -218,19 +142,10 @@ bailado-carioca-escola-api/
 
 # 🔐 4. SEGURANÇA
 
-## 4.1 Autenticação JWT
-
-- Expiração: **8 horas**
-- Assinatura: HMAC SHA-256
-- `requireAuth` retorna `Response` diretamente (não `{ error: Response }`)
-- Register público bloqueado após primeiro admin criado
-
-## 4.2 RBAC
-
-| Perfil | Permissões |
-|---|---|
-| `admin` | Leitura e escrita em todos os módulos, gestão de usuários |
-| `operator` | Leitura geral + criar/editar alunos e matrículas + marcar pagamentos + presença |
+- JWT HMAC SHA-256, expiração 8h
+- RBAC: `admin` e `operator`
+- Register bloqueado após primeiro admin
+- `requireAuth` retorna `Response` diretamente
 
 ---
 
@@ -238,129 +153,132 @@ bailado-carioca-escola-api/
 
 ## Pipeline central
 ```
-Students → Enrollments (regular + scholarship) → Payments → Cash → Dashboard/Reports
-                                                                          ↑
-Private: Students → private_packages → private_sessions → private_payments
+Students (origin=school) → Enrollments → Payments → Cash → Dashboard/Reports
+Students (origin=private) → private_packages → private_sessions → private_payments
 ```
+
+## Alunos — origin
+| origin | Descrição |
+|---|---|
+| `school` | Aluno da escola — aparece em Alunos e pode ser matriculado |
+| `private` | Aluno externo — aparece só em Aulas Particulares → Alunos Externos |
 
 ## Aulas Particulares
 
 ### Regras de negócio
-- Pacote padrão = 4 aulas (configurável)
-- `sessions_used` só incrementa quando sessão é marcada como **completed**
-- Pacote muda para `completed` automaticamente quando `sessions_used >= total_sessions`
-- Se sessão cancelada/no_show: decrementa `sessions_used` **apenas se estava completed**
-- Pagamento gerado automaticamente ao criar pacote (status `pending`)
-- Aula avulsa: `package_id = null`
-- Dois locais fixos: `bailado_laranjeiras` | `student_home`
-- Dois professores por sessão: `teacher_1_id` (obrigatório) + `teacher_2_id` (nullable)
+- Pacote: `sessions_used` só incrementa quando sessão marcada como `completed`
+- Aula avulsa com `price > 0` → gera `private_payment` automaticamente com `status = pending`
+- `origin_type = 'package'` para pacotes, `origin_type = 'session'` para avulsas
+- Selects de pacote/sessão mostram **todos** os alunos (escola + externos)
+
+### Fluxo financeiro
+```
+Pacote criado → private_payment pending (origin_type=package)
+Avulsa criada com price > 0 → private_payment pending (origin_type=session)
+Marcar pago → private_payment paid → aparece no recebido
+```
 
 ---
 
 # 💰 6. ARQUITETURA FINANCEIRA
 
 ## DRE Consolidado
-- **Mensalidades** — `payments` table, geradas automaticamente
-- **Aulas Particulares** — `private_payments` table, separado
-- **Dashboard** — soma os dois: `recebidoTotal = recebido + privPaid`
-- **Relatórios** — DRE com linha separada por origem + total geral
+- Mensalidades (`payments`) + Aulas Particulares (`private_payments`)
+- Dashboard: `recebidoTotal = recebido + privPaid`
+- Relatórios: DRE com linha separada por origem
 
 ## Caixa
-- **Saldo atual** = acumulado histórico
-- **Entradas/Saídas** = apenas mês corrente
+- Saldo = acumulado histórico
+- Entradas/Saídas = apenas mês corrente
 
 ## Bolsistas
-| Tipo | `scholarship` | `discount` | Impacto financeiro |
+| Tipo | `scholarship` | `discount` | Contagem turma |
 |---|---|---|---|
-| Regular | 0 | qualquer | Entra nos cálculos |
-| Bolsa parcial | 1 | 1-99% | Entra com desconto |
-| Bolsa integral | 1 | 100% | **Excluído dos cálculos** |
+| Regular | 0 | qualquer | Coluna Alunos |
+| Bolsista | 1 | qualquer | Coluna Bolsistas |
+| Integral | 1 | 100% | Coluna Bolsistas, excluído do financeiro |
 
 ---
 
-# 📱 7. RESPONSIVIDADE MOBILE/TABLET
+# 🖥️ 7. MÓDULOS — ESTADO ATUAL
 
-| Breakpoint | Comportamento |
+## Alunos
+- Tabela com status ativo/inativo baseado em matrículas
+- **Perfil do aluno** — modal com todas as matrículas, papel, status e total mensal
+- Botão "Matricular em outra turma" — navega para Matrículas com aluno pré-selecionado
+- Filtro `origin=school` implícito (alunos externos não aparecem aqui)
+
+## Turmas
+- Tabela com colunas: Nome, Professor, Unidade, Dia, Horário, **Alunos**, **Bolsistas**, Ações
+- Alunos = regulares (scholarship=0)
+- Bolsistas = scholarship=1, badge amarelo
+
+## Matrículas
+- Aba Regular + Aba Bolsistas
+- `checkOpenEnrollmentModal` abre modal automaticamente vindo do perfil do aluno
+- Aluno pré-selecionado e bloqueado quando vindo do perfil
+
+## Aulas Particulares
+- **Pacotes** — cards com barra de progresso
+- **Sessões** — toggle Por aluno / Por data (títulos coloridos: hoje=vermelho, semana=amarelo, próximas=verde, passadas=cinza)
+- **Pagamentos** — tabela com botão editar e marcar pago
+- **Alunos Externos** — CRUD completo, `origin=private`
+
+---
+
+# ⚠️ 8. INCIDENTES RESOLVIDOS (SESSÃO 6.0)
+
+| Problema | Correção |
 |---|---|
-| > 1024px | Layout desktop completo |
-| 768px–1024px | Tablet: sidebar 200px, grids 2 colunas |
-| < 768px | Mobile: sidebar overlay + hamburguer |
+| Aula avulsa não gerava payment | POST sessão cria `private_payment` se `!package_id && price > 0` |
+| Bolsista contado nos alunos regulares | Subquery separa `scholarship=0` dos alunos, `scholarship=1` na coluna bolsistas |
+| Aba bolsistas não abria ao voltar | `setupTabs` re-registrado no `if(initDone)` |
+| Modal turmas abre junto com a página | Tag `</div>` do modal fechada prematuramente |
+| Botão Ver aluno navegava para matrículas | Substituído por modal de perfil inline |
+| Alunos externos misturados com escola | Campo `origin` na tabela `students`, filtro por querystring |
+| `teachers.css` sem espaçamento | Reescrito com `data-table` padrão do sistema |
+| `units.css` sem espaçamento | Reescrito com espaçamento correto |
 
 ---
 
-# ⚠️ 8. INCIDENTES CRÍTICOS RESOLVIDOS (SESSÃO 5.0)
-
-## 8.1 Varredura completa do frontend
-
-| Arquivo | Problema corrigido |
-|---|---|
-| `api.js` | Typo `controller.signala` → `controller.signal` |
-| `students.js` | `checkAuth` no init removido |
-| `reports.js` | `checkAuth` + duplo registro de eventos removidos |
-| `attendance.js` | `checkAuth` no init removido |
-| `admin.js` | `checkAuth` no init removido |
-| `units.js` | `checkAuth` no init removido |
-| `cash.js` | `document.addEventListener` globais removidos |
-| `cash.html` | `onclick` inline removido |
-| `teachers.js` | `alert()` → `Toast`, `onclick` inline removido |
-| `teachers.html` | `page-header` padronizado, `onclick` inline removido |
-| `classes.html` | Tag modal fechada prematuramente corrigida |
-| `dashboard.html` | `h2` → `h1` no page-header |
-| `enrollments.js` | `setupTabs` re-registrado no `initDone`, `scholarship` com `Number()` |
-| `payments.js` | `loadCashflow` usa cache em vez de requisição dupla |
-
-## 8.2 Contagem de alunos por turma incorreta
-- **Causa:** Subquery usava `role IN ('leader','conductor')` — roles antigos
-- **Correção:** Adicionados `conductor_m`, `conductor_f`, `follower_f`, `follower_m`
-
-## 8.3 Aba Bolsistas não abria ao voltar para a página
-- **Causa:** `setupTabs` não era chamado quando `initDone = true`
-- **Correção:** `setupTabs()` adicionado no bloco `if(initDone)`
-
-## 8.4 `scholarship` comparação falhava
-- **Causa:** SQLite retorna inteiro, JS comparava com `=== 1` mas recebia string em alguns casos
-- **Correção:** `Number(e.scholarship) === 1` em todos os pontos
-
----
-
-# 🏁 9. STATUS ATUAL DO SISTEMA
+# 🏁 9. STATUS ATUAL
 
 | Área | Status | Detalhe |
 |---|---|---|
-| Backend | 🟢 Estável | Todos os módulos em produção, varredura completa |
-| Frontend | 🟢 Limpo | Varredura completa — checkAuth, alert, onclick inline, eventos globais corrigidos |
-| Autenticação | 🟢 Hardened | JWT 8h, register bloqueado, name no /me |
-| Financeiro | 🟢 Avançado | DRE consolidado mensalidades + particulares |
-| Presença | 🟢 Ativo | Chamada + histórico + dashboard |
-| Mobile | 🟢 Responsivo | Hamburguer + overlay + login corrigido |
-| Aulas Particulares | 🟢 Ativo | Pacotes + sessões + pagamentos + toggle de visão |
+| Backend | 🟢 Estável | Todos os módulos em produção |
+| Frontend | 🟢 Limpo | Varredura completa concluída |
+| Financeiro | 🟢 Avançado | DRE consolidado, avulsas com payment automático |
+| Alunos | 🟢 Completo | Perfil, matrículas, total mensal, origin |
+| Turmas | 🟢 Completo | Bolsistas separados na contagem |
+| Aulas Particulares | 🟢 Completo | Pacotes + sessões + pagamentos + externos |
+| Mobile | 🟢 Responsivo | Hamburguer + overlay |
 | Deploy | 🟢 Estável | Cloudflare Pages + Workers |
 
 ---
 
 # 📋 10. USUÁRIOS DO SISTEMA (PRODUÇÃO)
 
-| Email | Role | Observação |
-|---|---|---|
-| alvessilvaedson125@gmail.com | admin | Usuário principal |
-| tavarescampos.livia@gmail.com | admin | |
-| bailadocarioca@gmail.com | operator | Senha: bailado_operador |
-| edson@bailado.com | admin | |
+| Email | Role |
+|---|---|
+| alvessilvaedson125@gmail.com | admin |
+| tavarescampos.livia@gmail.com | admin |
+| bailadocarioca@gmail.com | operator |
+| edson@bailado.com | admin |
 
 ---
 
-# 🚀 11. ROADMAP EVOLUTIVO
+# 🚀 11. ROADMAP
 
-## Pendente curto prazo
+## Curto prazo
 - [ ] Tabela Turmas/Professores no mobile — colunas cortadas
 - [ ] Refresh token
 - [ ] Logs estruturados no backend
-
-## Médio prazo
 - [ ] Filtro por unidade nos relatórios
 - [ ] Exportação de relatório de frequência
+
+## Médio prazo
 - [ ] Notificações de inadimplência
-- [ ] Agenda visual (grid semanal por professor/aluno)
+- [ ] Agenda visual (grid semanal)
 - [ ] Perfis `teacher` e `financeiro` no RBAC
 
 ## Longo prazo
@@ -371,31 +289,17 @@ Private: Students → private_packages → private_sessions → private_payments
 
 ---
 
-# 📋 12. PROCESSO DE DESENVOLVIMENTO
+# 📋 12. REGRAS INVIOLÁVEIS
 
-## Padrão de commit
-```
-feat: nova funcionalidade
-fix: correção de bug
-refactor: melhoria sem mudança de comportamento
-migration: alteração no banco de dados
-docs: atualização de documentação
-```
-
-## Regras invioláveis
-
-- Nunca commitar código não testado
 - Nunca usar `alert()` — usar `Toast`
-- Nunca usar `onclick` inline no HTML — eventos via `addEventListener` no JS
+- Nunca usar `onclick` inline no HTML
 - Nunca converter IDs com `Number()` ou `parseInt()`
 - Nunca fazer redirect fora do `auth.js`/`router.js`
-- Nunca armazenar `JWT_SECRET` no código
 - `document.addEventListener("click/input/change")` global **proibido**
-- `git add .` **proibido** — sempre especificar arquivos explicitamente
-- `checkAuth()` **proibido** dentro de módulos — exclusivo do `router.js`
-- Módulos com `initDone` **devem** re-registrar eventos e recarregar dados ao voltar
+- `git add .` **proibido**
+- `checkAuth()` **proibido** dentro de módulos
+- Módulos com `initDone` devem re-registrar eventos ao voltar
 
 ---
 
-*Documento mantido pelo time de desenvolvimento.*
-*Última atualização: 31 de Março de 2026 — Sessão 5.0*
+*Última atualização: 01 de Abril de 2026 — Sessão 6.0*
